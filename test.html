@@ -85,14 +85,20 @@
       if (editingShapes && currentEditingShape) {
         currentEditingShape.nearScale = parseFloat(document.querySelector("#nearScale").value);
         currentEditingShape.farScale = parseFloat(document.querySelector("#farScale").value);
-        currentEditingShape.floorOrMask = document.querySelector("#floorOrMask").value;
-        console.log(currentEditingShape);
+
+        let floorOrMaskSelectValue = document.querySelector("#floorOrMask").value;
+
+        if (floorOrMaskSelectValue != currentEditingShape.floorOrMask) {
+          currentEditingShape.floorOrMask = floorOrMaskSelectValue;
+
+          if (floorOrMaskSelectValue == 'floor') {
+            currentEditingShape.tiles = null;
+          } else {
+            currentEditingShape.tiles = tileMask(currentEditingShape);
+          }
+        }
+
         document.querySelector('#saveScales').disabled = true;
-
-        // CREATE A MASK GROUP IF CONVERTED TO MASK, LINK SHAPE TO MASK GROUP
-        // OR
-        // DELETE A MASK GROUP IF CONVERTING TO FLOOR, USING SHAPE LINK
-
         draw();
       }
     }
@@ -317,7 +323,6 @@
       if (showGuides) {
         document.getElementById("placeCharacter").style.display = "none";
         document.getElementById("makeShapes").style.display = "none";
-        // document.getElementById("makeMasks").style.display = "none";
         document.getElementById("editShapes").style.display = "none";
         document.getElementById("shapeEditor").style.display = "none";
         document.getElementById("clearPoints").style.display = "none";
@@ -327,7 +332,6 @@
       } else {    
         document.getElementById("placeCharacter").style.display = "block";
         document.getElementById("makeShapes").style.display = "block";
-        // document.getElementById("makeMasks").style.display = "block";
         document.getElementById("editShapes").style.display = "block";
         document.getElementById("clearPoints").style.display = "block";
         document.getElementById("shapeEditor").style.display = "none";
@@ -368,6 +372,24 @@
       }
 
       if (showGuides) {
+        ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+
+        if (points.length > 0) {
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+
+          for (let n = 1; n < points.length; n++) {
+            ctx.lineTo(points[n].x, points[n].y);
+            ctx.stroke();
+          }
+
+          for (let n = 0; n < points.length; n++) {
+            ctx.beginPath();
+            ctx.rect(points[n].x - 2.5, points[n].y - 2.5, 5, 5);
+            ctx.fill()
+          }
+        }
+
         for (let n = 0; n < shapes.length; n++) {
           ctx.beginPath();
 
@@ -385,6 +407,15 @@
 
           ctx.fill();
         }
+
+        ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
+        shapes.filter(function(shape) { return shape.tiles; }).forEach(function(shape) {
+          ctx.beginPath();
+          shape.tiles.forEach(function(tile) {
+            ctx.rect(tile.x, tile.y, tile.size, tile.size);
+            ctx.fill();
+          });
+        });
       }
 
       sortedDrawables().forEach(function(drawable) {
