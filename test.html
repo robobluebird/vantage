@@ -33,6 +33,7 @@
     <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
     <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
     <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
+    <button onClick="addLink()" id="addLink">add link</button>
     <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
     <div id="shapeEditor" style="display: none;">
       <label for="nearScale">near scale</label>
@@ -56,7 +57,6 @@
     const characters = [];
     const interactables = []; // LINKS, IMAGES, TEXT, VIDEO
     const masks = [];
-    const maskGroups = [];
     const keys = {
       up: false,
       down: false,
@@ -220,8 +220,6 @@
               floorOrMask: 'floor'
             });
 
-            maskGroups.push(tileMask(shapes[shapes.length - 1]));
-
             document.getElementById("placeCharacter").disabled = false
             document.getElementById("editShapes").disabled = false
           } else {
@@ -242,6 +240,9 @@
 
     function scaledImageHeight() {
       return backgroundImage.naturalHeight * scale;
+    }
+
+    function addLink() {
     }
 
     function makeShapes() {
@@ -355,24 +356,17 @@
       ctx.drawImage(backgroundImage, 0, 0, scaledImageWidth(), scaledImageHeight());
 
       if (!showGuides) {
-        maskGroups.forEach(function(maskGroup) {
-          // SORT TILES TO FIND "BOTTOM" OF GROUP FOR COMPARISON TO CHARACTERS
-          // GET IMAGE DATA FOR TILES AND ATTACH TO DATA ELEM OF MASK GROUP
-
-          /**
-          mask.data =
-            ctx.getImageData(
-              mask.xp * scaledImageWidth(),
-              mask.yp * scaledImageHeight(),
-              mask.wp * scaledImageWidth(),
-              mask.hp * scaledImageHeight()
-            );
-          **/
+        shapes.filter(function(shape) { return shape.tiles; }).forEach(function(shape) {
+          shape.tiles.forEach(function(tile) {
+            if (!tile.data) {
+              tile.data = ctx.getImageData(tile.x, tile.y, tile.size, tile.size);
+            }
+          });
         });
       }
 
       if (showGuides) {
-        ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.fillStyle = "rgba(255, 0, 0, 1.0)";
 
         if (points.length > 0) {
           ctx.beginPath();
@@ -408,10 +402,10 @@
           ctx.fill();
         }
 
-        ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
         shapes.filter(function(shape) { return shape.tiles; }).forEach(function(shape) {
-          ctx.beginPath();
           shape.tiles.forEach(function(tile) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(${getRandomInt(256)}, ${getRandomInt(256)}, ${getRandomInt(256)}, 1.0)`;
             ctx.rect(tile.x, tile.y, tile.size, tile.size);
             ctx.fill();
           });
@@ -430,9 +424,10 @@
             0,
             drawable.elem.flip
           );
-        } else if (!showGuides) {
-          // DO TILE PLACEMENT
-          // ctx.putImageData(drawable.elem.data, drawable.x, drawable.y);
+        } else if (!showGuides && drawable.elem.tiles) {
+          drawable.elem.tiles.forEach(function(tile) {
+            ctx.putImageData(tile.data, tile.x, tile.y);
+          });
         }
       });
 
@@ -472,32 +467,48 @@
       }
     }
 
+    function getRandomInt(max) {
+      return Math.floor(Math.random() * max);
+    }
+
     function sortedDrawables() {
-      // DO MASKGROUP THING TO FIND "BOTTOM" OF MASKGROUP AND USE IT FOR SORTING OR WHATEVER
-      return characters.concat(masks).map(function(elem) {
-        if (elem.wp) {
-          /**
+      return characters.concat(shapes.filter(function(shape) { return shape.floorOrMask == 'mask'; })).map(function(elem) {
+        if (elem.tiles) {
+          let sortedTiles = [...elem.tiles].sort(function(a, b) {
+              if (a.y + a.size < b.y + b.size) {
+                return 1;
+              } else if (a.y + a.size > b.y + b.size) {
+                return -1;
+              } else {
+                return 0;
+              }
+            });
           return {
             elem: elem,
-            x: elem.xp * scaledImageWidth(),
-            y: elem.yp * scaledImageHeight(),
-            width: elem.wp * scaledImageWidth(),
-            height: elem.hp * scaledImageHeight()
+            type: 'mask',
+            bottom: sortedTiles[0].y + sortedTiles[0].size
           };
-          **/
         } else {
           let tScale = ((elem.yp * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) / ((elem.shape.maxYP * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) * (elem.shape.nearScale - elem.shape.farScale) + elem.shape.farScale;
 
           return {
             elem: elem,
+            type: 'character',
             x: (elem.xp * scaledImageWidth()) - ((elem.width / 2) * tScale),
             y: (elem.yp * scaledImageHeight()) - (elem.height * tScale),
             width: elem.width * tScale,
-            height: elem.height * tScale
+            height: elem.height * tScale,
+            bottom: ((elem.yp * scaledImageHeight()) - (elem.height * tScale)) + (elem.height * tScale)
           };
         }
       }).sort(function(a, b) {
-        return a.y + a.height > b.y + b.height;
+        if (a.bottom < b.bottom) {
+          return -1;
+        } else if (a.bottom > b.bottom) {
+          return 1;
+        } else {
+          return 0;
+        }
       });
     }
 
@@ -508,10 +519,10 @@
         return {x: point.xp * scaledImageWidth(), y: point.yp * scaledImageHeight()};
       });
 
-      let minX = Math.floor(points.sort(function(a, b) { return a.x > b.x; })[0].x);
-      let minY = Math.floor(points.sort(function(a, b) { return a.y > b.y; })[0].y);
-      let maxX = Math.ceil(points.sort(function(a, b) { return a.x < b.x; })[0].x);
-      let maxY = Math.ceil(points.sort(function(a, b) { return a.y < b.y; })[0].y);
+      let minX = Math.floor([...points].sort(function(a, b) { return a.x > b.x; })[0].x);
+      let minY = Math.floor([...points].sort(function(a, b) { return a.y > b.y; })[0].y);
+      let maxX = Math.ceil([...points].sort(function(a, b) { return a.x < b.x; })[0].x);
+      let maxY = Math.ceil([...points].sort(function(a, b) { return a.y < b.y; })[0].y);
 
       let y = minY;
       while (y < maxY) {
@@ -722,7 +733,7 @@
       if (changed) {
         let xShape, yShape;
 
-        shapes.every(function(shape) {
+        shapes.filter(function(shape) { return shape.floorOrMask == 'floor'; }).every(function(shape) {
           if (adaptedPointIsInPolygon({x: newXP * scaledImageWidth(), y: characters[0].yp * scaledImageHeight()}, shape.points)) {
             xShape = shape;
 
@@ -800,90 +811,6 @@
           break;
       };
     });
-
-    /**
-    function maskMouseMove(e) {
-      if (Math.abs(e.clientX - points[0].x) > 0 && Math.abs(e.clientY - points[0].y) > 0) {
-        if (points.length > 1) {
-          points.pop();
-        }
-
-        points.push({x: e.clientX, y: e.clientY});
-        draw();
-      }
-    }
-
-    canvas.onmousedown = function(e) {
-      if (makingMasks) {
-        points.push({x: e.clientX, y: e.clientY});
-        canvas.onmousemove = maskMouseMove; 
-        draw();
-      }
-    }
-
-    canvas.onmouseup = function(e) {
-      if (makingMasks && points.length > 1) {
-        masks.push(
-          {
-            xp: (points[0].x < points[1].x ? points[0].x : points[1].x) / scaledImageWidth(),
-            yp: (points[0].y < points[1].y ? points[0].y : points[1].y) / scaledImageHeight(),
-            wp: (Math.abs(points[0].x - points[1].x)) / scaledImageWidth(),
-            hp: (Math.abs(points[0].y - points[1].y)) / scaledImageHeight()
-          }
-        );
-
-        canvas.onmousemove = null;
-        points.splice(0, points.length);
-        draw();
-      }
-    }
-
-      if (makingMasks && points.length == 2) {
-        ctx.beginPath();
-
-        ctx.fillStyle = "rgba(0, 0, 255, 0.5)";
-
-        ctx.rect(
-          points[0].x < points[1].x ? points[0].x : points[1].x,
-          points[0].y < points[1].y ? points[0].y : points[1].y,
-          Math.abs(points[0].x - points[1].x),
-          Math.abs(points[0].y - points[1].y)
-        );
-        
-        ctx.fill();
-      } else if (makingShapes) {
-        ctx.beginPath();
-
-        ctx.fillStyle = "red";
-
-        for (let n = 0; n < points.length; n++) {
-          ctx.fillRect(points[n].x - 5, points[n].y - 5, 10, 10);
-
-          if (n > 0) {
-            ctx.moveTo(points[n - 1].x, points[n - 1].y);
-            ctx.lineTo(points[n].x, points[n].y);
-            ctx.stroke();
-          }
-        }
-      }
-
-        ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
-
-        for (let n = 0; n < maskGroups.length; n++) {
-          maskGroups[n].forEach(function (square) {
-            ctx.beginPath();
-
-            ctx.rect(
-              square.x,
-              square.y,
-              square.size,
-              square.size
-            );
-
-            ctx.fill();
-          });
-        }
-    **/
   </script>
 </body>
 </html>
