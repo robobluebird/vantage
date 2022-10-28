@@ -131,18 +131,37 @@
 
     canvas.onclick = function(e) {
       if (editingShapes) {
-        shapes.every(function(shape) {
-          if (adaptedPointIsInPolygon({x: e.clientX, y: e.clientY }, shape.points)) {
-            document.querySelector("#nearScale").value = shape.nearScale;
-            document.querySelector("#farScale").value = shape.farScale;
-            document.querySelector("#floorOrMask").value = shape.floorOrMask;
-            currentEditingShape = shape;
+        let clickedShapes = shapes.filter(function(shape) { return adaptedPointIsInPolygon({x: e.clientX, y: e.clientY }, shape.points); });
 
-            return false;
+        if (clickedShapes.length == 1) {
+          document.querySelector("#nearScale").value = clickedShapes[0].nearScale;
+          document.querySelector("#farScale").value = clickedShapes[0].farScale;
+          document.querySelector("#floorOrMask").value = clickedShapes[0].floorOrMask;
+          currentEditingShape = clickedShapes[0];
+        } else if (clickedShapes.length > 1) {
+          if (currentEditingShape) {
+            let index = clickedShapes.findIndex(function (shape) {
+              return shape == currentEditingShape;
+            });
+
+            if (index == -1) index = 0;
+
+            index++;
+
+            if (index >= clickedShapes.length) index = 0;
+
+
+            document.querySelector("#nearScale").value = clickedShapes[index].nearScale;
+            document.querySelector("#farScale").value = clickedShapes[index].farScale;
+            document.querySelector("#floorOrMask").value = clickedShapes[index].floorOrMask;
+            currentEditingShape = clickedShapes[index];
           } else {
-            return true;
+            document.querySelector("#nearScale").value = clickedShapes[0].nearScale;
+            document.querySelector("#farScale").value = clickedShapes[0].farScale;
+            document.querySelector("#floorOrMask").value = clickedShapes[0].floorOrMask;
+            currentEditingShape = clickedShapes[0];
           }
-        });
+        }
       } else if (placingCharacter) {
         shapes.every(function(shape) {
           if (adaptedPointIsInPolygon({x: e.clientX, y: e.clientY }, shape.points)) {
