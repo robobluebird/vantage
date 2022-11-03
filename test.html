@@ -14,12 +14,60 @@
       z-index: 1;
     }
 
+    #linkForm {
+      position: absolute;
+      display: none;
+      left: 0;
+      top: 0;
+      z-index: 1;
+    }
+
+    #textForm {
+      position: absolute;
+      right: 0;
+      top: 0;
+      z-index: 1;
+    }
+
+    #uploadForm {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+    }
+
     #shapeEditor {
       background-color: lightgrey;
     }
 
-    #controls button, #shapeEditor button, #shapeEditor label, #shapeEditor input {
+    #controls button, #shapeEditor button, #shapeEditor label,
+    #shapeEditor input, #linkForm input, #linkForm textarea,
+    #uploadForm input, #textForm textarea {
       display: block;
+    }
+
+    #messages {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 20%;
+      height: 100%;
+      padding: 5px;
+    }
+
+    #messages .message {
+      position: relative;
+      border: 1px solid black;
+      border-radius: 5px;
+      margin: 5px 0 0 0;
+      padding: 5px;
+    }
+
+    #messages .message img {
+      max-height:100%;
+      max-width:100%;
+      height:auto;
+      width:auto;
     }
   </style>
 
@@ -28,12 +76,18 @@
   <link rel="mask-icon" href="favicon.ico" color="#000000">
 </head>
 <body>
+  <div id="messages"></div>
   <div id="controls">
     <button onclick="placeCharacter()" id="placeCharacter" disabled=true>place character</button>
     <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
     <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
     <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
+    <button onClick="addWarp()" id="addWarp" disabled=true>add warp</button>
     <button onClick="addLink()" id="addLink">add link</button>
+    <button onClick="addText()" id="addText">add text</button>
+    <button onClick="addImage()" id="addImage">add image</button>
+    <button onClick="addAudio()" id="addAudio">add audio</button>
+    <button onClick="addVideo()" id="addVideo">add video</button>
     <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
     <div id="shapeEditor" style="display: none;">
       <label for="nearScale">near scale</label>
@@ -46,7 +100,23 @@
         <option value="mask">mask</option>
       </select>
       <button disabled=true id="saveScales" onclick="saveScales()">save</button>
+      <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
     </div>
+  </div>
+  <div id="textForm">
+    <textarea placeholder="text content..." style="resize: none;" cols=18 rows=5></textarea>
+  </div>
+  <div id="linkForm">
+    <input id="url" type="text" placeholder="link...">
+    <textarea id="urlDescription" placeholder="description..." style="resize: none;" cols=18 rows=5></textarea>
+    <button>go</button>
+    <button>cancel</button>
+  </div>
+  <div id="uploadForm">
+    <form>
+      <input type="file"/>
+      <input type="submit" value="upload"/>
+    </form>
   </div>
   <canvas id="canvas" style="z-index: 0; position: relative; background-color:blue;">
   </canvas>
@@ -56,6 +126,28 @@
     const shapes = [];
     const characters = [];
     const interactables = []; // LINKS, IMAGES, TEXT, VIDEO
+    const interactableTemplates = [
+      {
+        name: 'link',
+        image: new Image()
+      },
+      {
+        name: 'text',
+        image: new Image()
+      },
+      {
+        name: 'image',
+        image: new Image()
+      },
+      {
+        name: 'audio',
+        image: new Image()
+      },
+      {
+        name: 'video',
+        image: new Image()
+      }
+    ];
     const masks = [];
     const keys = {
       up: false,
@@ -68,18 +160,31 @@
     const backgroundImage = new Image();
     const backgroundWidth = 0;
     const backgroundHeight = 0;
-
+    let displayingMessages = false;
     let showGuides = true;
     let scale = 1.0;
     let mouseX = 0;
     let mouseY = 0;
+    let iSize = 0.025
     let placingCharacter = false;
+    let placingInteractable;
+    let configuringInteractable;
     let makingShapes = true;
     let maskSecondPoint = null;
     let editingShapes = false;
     let currentEditingShape;
     let idealPlacingWidth;
     let idealPlacingHeight;
+    let idealInteractablePlacingSize;
+
+    function resetForms() {
+      ['link', 'text', 'upload'].forEach(function(type) {
+        let form = document.querySelector(`#${type}Form`);
+        form.style.left = 0;
+        form.style.top = 0;
+        form.style.display = 'none';
+      });
+    }
 
     function saveScales() {
       if (editingShapes && currentEditingShape) {
@@ -103,12 +208,26 @@
       }
     }
 
+    function deleteShape() {
+      if (editingShapes && currentEditingShape) {
+        let index = shapes.findIndex(function(shape) { return shape == currentEditingShape; });
+
+        if (index > -1) {
+          shapes.splice(index, 1);
+        }
+        
+        clearEditValues();
+        makeShapes();
+      }
+    }
+
     function clearEditValues() {
       currentEditingShape = null;
       document.querySelector("#nearScale").value = null;
       document.querySelector("#farScale").value = null;
       document.querySelector("#floorOrMask").selectedIndex = -1;
       document.querySelector('#saveScales').disabled = true;
+      document.querySelector('#deleteShape').disabled = true;
     }
 
     function floorOrMaskChanged(elem) {
@@ -129,14 +248,101 @@
       }
     }
 
+    function getValidUrl(url) {
+      let newUrl = window.decodeURIComponent(url);
+
+      newUrl = newUrl.trim().replace(/\s/g, "");
+
+      if(/^(:\/\/)/.test(newUrl)){
+          return `http${newUrl}`;
+      }
+
+      if(!/^(f|ht)tps?:\/\//i.test(newUrl)){
+          return `http://${newUrl}`;
+      }
+
+      return newUrl;
+    }
+
+    function finishPlacingInteractable() {
+      if (!idealInteractablePlacingSize) {
+        let idealSize = backgroundImage.naturalWidth * iSize;
+        let imageScale = idealSize / interactableTemplates[0].image.naturalWidth;
+
+        idealInteractablePlacingSize = interactableTemplates[0].image.naturalWidth * imageScale;
+      }
+
+      let data = {};
+
+      switch (configuringInteractable.type) {
+        case 'link':
+          let url = getValidUrl(document.querySelector('#url').value);
+          data.url = url;
+          data.description = document.querySelector('#urlDescription').value || url;
+          break;
+      }
+
+      interactables.push({
+        id: generateUUID(),
+        type: configuringInteractable.type,
+        data: data,
+        xp: configuringInteractable.x / scaledImageWidth(),
+        yp: configuringInteractable.y / scaledImageHeight(),
+        size:  idealInteractablePlacingSize,
+      });
+
+      idealInteractablePlacingSize = null;
+      placingInteractable = null;
+      configuringInteractable = null;
+      canvas.onmousemove = null;
+
+      resetForms();
+      clearEditValues();
+      makeShapes();
+    }
+
+    function generateUUID() { // Public Domain/MIT
+    var d = new Date().getTime();//Timestamp
+    var d2 = ((typeof performance !== 'undefined') && performance.now && (performance.now()*1000)) || 0;
+    return 'xxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16;//random number between 0 and 16
+        if(d > 0){//Use timestamp until depleted
+            r = (d + r)%16 | 0;
+            d = Math.floor(d/16);
+        } else {//Use microseconds since page-load if supported
+            r = (d2 + r)%16 | 0;
+            d2 = Math.floor(d2/16);
+        }
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
     canvas.onclick = function(e) {
-      if (editingShapes) {
+      if (placingInteractable) {
+        if (placingInteractable == 'link') {
+          let form = document.querySelector('#linkForm');
+
+          form.style.display = 'block';
+          form.style.left = e.clientX - form.offsetWidth;
+          form.style.top = e.clientY - form.offsetHeight;
+          form.querySelector('button').onclick = finishPlacingInteractable;
+
+          configuringInteractable = {
+            type: 'link',
+            x: e.clientX,
+            y: e.clientY
+          };
+
+          placingInteractable = null;
+        }
+      } else if (editingShapes) {
         let clickedShapes = shapes.filter(function(shape) { return adaptedPointIsInPolygon({x: e.clientX, y: e.clientY }, shape.points); });
 
         if (clickedShapes.length == 1) {
           document.querySelector("#nearScale").value = clickedShapes[0].nearScale;
           document.querySelector("#farScale").value = clickedShapes[0].farScale;
           document.querySelector("#floorOrMask").value = clickedShapes[0].floorOrMask;
+          document.querySelector("#deleteShape").disabled = false;
           currentEditingShape = clickedShapes[0];
         } else if (clickedShapes.length > 1) {
           if (currentEditingShape) {
@@ -150,15 +356,16 @@
 
             if (index >= clickedShapes.length) index = 0;
 
-
             document.querySelector("#nearScale").value = clickedShapes[index].nearScale;
             document.querySelector("#farScale").value = clickedShapes[index].farScale;
             document.querySelector("#floorOrMask").value = clickedShapes[index].floorOrMask;
+            document.querySelector("#deleteShape").disabled = false;
             currentEditingShape = clickedShapes[index];
           } else {
             document.querySelector("#nearScale").value = clickedShapes[0].nearScale;
             document.querySelector("#farScale").value = clickedShapes[0].farScale;
             document.querySelector("#floorOrMask").value = clickedShapes[0].floorOrMask;
+            document.querySelector("#deleteShape").disabled = false;
             currentEditingShape = clickedShapes[0];
           }
         }
@@ -262,17 +469,18 @@
     }
 
     function addLink() {
-    }
-
-    function makeShapes() {
       placingCharacter = false;
-      makingShapes = true;
+      makingShapes = false;
       editingShapes = false;
+      placingInteractable = 'link';
+      configuringInteractable = null;
 
       clearEditValues();
+      resetForms();
 
       document.getElementById("placeCharacter").disabled = false;
-      document.getElementById("makeShapes").disabled = true;
+      document.getElementById("makeShapes").disabled = false;
+      document.getElementById("addLink").disabled = true;
 
       if (shapes.length > 0) {
         document.getElementById("editShapes").disabled = false;
@@ -282,6 +490,39 @@
 
       points.splice(0, points.length);
 
+      canvas.onmousemove = function(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        draw();
+      }
+
+      draw();
+    }
+
+    function makeShapes() {
+      placingCharacter = false;
+      makingShapes = true;
+      editingShapes = false;
+      placingInteractable = null;
+      configuringInteractable = null;
+
+      clearEditValues();
+      resetForms();
+
+      document.getElementById("placeCharacter").disabled = false;
+      document.getElementById("makeShapes").disabled = true;
+      document.getElementById("addLink").disabled = false;
+
+      if (shapes.length > 0) {
+        document.getElementById("editShapes").disabled = false;
+      }
+
+      document.getElementById("shapeEditor").style.display = "none";
+
+      points.splice(0, points.length);
+
+      canvas.onmousemove = null;
+
       draw();
     }
 
@@ -289,11 +530,15 @@
       placingCharacter = true;
       makingShapes = false;
       editingShapes = false;
+      placingInteractable = null;
+      configuringInteractable = null;
 
       clearEditValues();
+      resetForms();
 
       document.getElementById("placeCharacter").disabled = true;
       document.getElementById("makeShapes").disabled = false;
+      document.getElementById("addLink").disabled = false;
 
       if (shapes.length > 0) {
         document.getElementById("editShapes").disabled = false;
@@ -314,11 +559,15 @@
       placingCharacter = false;
       makingShapes = false;
       editingShapes = true;
+      placingInteractable = null;
+      configuringInteractable = null;
 
       clearEditValues();
+      resetForms();
 
       document.getElementById("placeCharacter").disabled = false;
       document.getElementById("makeShapes").disabled = false;
+      document.getElementById("addLink").disabled = false;
       document.getElementById("editShapes").disabled = true;
       document.getElementById("shapeEditor").style.display = "block";
 
@@ -333,28 +582,44 @@
       document.getElementById("shapeEditor").style.display = "none";
 
       clearEditValues();
-
+      resetForms();
       makeShapes();
 
       draw();
     }
 
     function toggleGuides() {
+      resetForms();
+
       if (showGuides) {
+        document.getElementById("addLink").style.display = "none";
         document.getElementById("placeCharacter").style.display = "none";
         document.getElementById("makeShapes").style.display = "none";
         document.getElementById("editShapes").style.display = "none";
         document.getElementById("shapeEditor").style.display = "none";
         document.getElementById("clearPoints").style.display = "none";
+        document.getElementById("addWarp").style.display = "none";
+        document.getElementById("addLink").style.display = "none";
+        document.getElementById("addText").style.display = "none";
+        document.getElementById("addImage").style.display = "none";
+        document.getElementById("addAudio").style.display = "none";
+        document.getElementById("addVideo").style.display = "none";
         document.getElementById("toggleGuides").innerText = "show guides";
         showGuides = false;
         draw();
       } else {    
+        document.getElementById("addLink").style.display = "block";
         document.getElementById("placeCharacter").style.display = "block";
         document.getElementById("makeShapes").style.display = "block";
         document.getElementById("editShapes").style.display = "block";
         document.getElementById("clearPoints").style.display = "block";
         document.getElementById("shapeEditor").style.display = "none";
+        document.getElementById("addWarp").style.display = "block";
+        document.getElementById("addLink").style.display = "block";
+        document.getElementById("addText").style.display = "block";
+        document.getElementById("addImage").style.display = "block";
+        document.getElementById("addAudio").style.display = "block";
+        document.getElementById("addVideo").style.display = "block";
         document.getElementById("toggleGuides").innerText = "hide guides";
         showGuides = true;
         makeShapes();
@@ -362,6 +627,7 @@
     }
 
     function resize() {
+      resetForms();
       canvas.width  = scaledImageWidth();
       canvas.height = scaledImageHeight();
     }
@@ -378,7 +644,7 @@
         shapes.filter(function(shape) { return shape.tiles; }).forEach(function(shape) {
           shape.tiles.forEach(function(tile) {
             if (!tile.data) {
-              tile.data = ctx.getImageData(tile.x, tile.y, tile.size, tile.size);
+              tile.data = ctx.getImageData(tile.xp * scaledImageWidth(), tile.yp * scaledImageHeight(), tile.size, tile.size);
             }
           });
         });
@@ -425,7 +691,7 @@
           shape.tiles.forEach(function(tile) {
             ctx.beginPath();
             ctx.fillStyle = `rgba(${getRandomInt(256)}, ${getRandomInt(256)}, ${getRandomInt(256)}, 1.0)`;
-            ctx.rect(tile.x, tile.y, tile.size, tile.size);
+            ctx.rect(tile.xp * scaledImageWidth(), tile.yp * scaledImageHeight(), tile.size, tile.size);
             ctx.fill();
           });
         });
@@ -445,9 +711,22 @@
           );
         } else if (!showGuides && drawable.elem.tiles) {
           drawable.elem.tiles.forEach(function(tile) {
-            ctx.putImageData(tile.data, tile.x, tile.y);
+            ctx.putImageData(tile.data, tile.xp * scaledImageWidth(), tile.yp * scaledImageHeight());
           });
         }
+      });
+
+      interactables.forEach(function(interactable) {
+        let image = interactableTemplates.filter(function(template) { return template.name == interactable.type; })[0].image;
+
+        drawImage(
+          ctx,
+          image,
+          (interactable.xp * scaledImageWidth()) - (interactable.size / 2),
+          (interactable.yp * scaledImageHeight()) - (interactable.size / 2),
+          interactable.size,
+          interactable.size
+        );
       });
 
       if (placingCharacter) {
@@ -483,20 +762,124 @@
         );
 
         ctx.globalAlpha = 1.0;
+      } else if (configuringInteractable) {
+        if (!idealInteractablePlacingSize) {
+          let idealSize = backgroundImage.naturalWidth * iSize;
+          let imageScale = idealSize / interactableTemplates[0].image.naturalWidth;
+
+          idealInteractablePlacingSize = interactableTemplates[0].image.naturalWidth * imageScale;
+        }
+
+        ctx.globalAlpha = 0.5;
+
+        let image = interactableTemplates.filter(function(template) { return template.name == configuringInteractable.type; })[0].image;
+
+        drawImage(
+          ctx,
+          image,
+          configuringInteractable.x - (idealInteractablePlacingSize / 2),
+          configuringInteractable.y - (idealInteractablePlacingSize / 2),
+          idealInteractablePlacingSize,
+          idealInteractablePlacingSize
+        );
+
+        ctx.globalAlpha = 1.0;
+      } else if (placingInteractable) {
+        if (!idealInteractablePlacingSize) {
+          let idealSize = backgroundImage.naturalWidth * iSize;
+          let imageScale = idealSize / interactableTemplates[0].image.naturalWidth;
+
+          idealInteractablePlacingSize = interactableTemplates[0].image.naturalWidth * imageScale;
+        }
+
+        ctx.globalAlpha = 0.5;
+
+        let image = interactableTemplates.filter(function(template) { return template.name == placingInteractable; })[0].image;
+
+        drawImage(
+          ctx,
+          image,
+          mouseX - (idealInteractablePlacingSize / 2),
+          mouseY - (idealInteractablePlacingSize / 2),
+          idealInteractablePlacingSize,
+          idealInteractablePlacingSize
+        );
+
+        ctx.globalAlpha = 1.0;
       }
+
+      let cInts = collidingInteractables();
+
+      if (cInts.length > 0) {
+        let msgs = document.querySelector('#messages');
+        
+        [...msgs.querySelectorAll('.message')].filter(function(msg) {
+          return cInts.findIndex(function(ci) { return msg.id.split('message')[1] == ci.id }) == -1;
+        }).forEach(function(msg) {
+          msg.remove();
+        });
+      } else {
+        let msgs = document.querySelector('#messages');
+
+        [...msgs.querySelectorAll('.message')].forEach(function(msg) { msg.remove() });
+      }
+
+      cInts.forEach(function(ci) {
+        let msgs = document.querySelector('#messages');
+        let msg = msgs.querySelector(`#message${ci.id}`);
+
+        if (!msg) {
+          if (ci.type == 'link') {
+            let m = document.createElement('div');
+            m.className = "message";
+            m.id = `message${ci.id}`;
+
+            let a = document.createElement('a');
+            let linkText = document.createTextNode(ci.data.description);
+            a.href = ci.data.url;
+            a.target = '_blank';
+            a.appendChild(linkText);
+
+            m.appendChild(a);
+            msgs.appendChild(m);
+          }
+        }
+      });
     }
 
     function getRandomInt(max) {
       return Math.floor(Math.random() * max);
     }
 
+    function collidingInteractables() {
+      if (interactables.length == 0) return [];
+
+      return characters.map(function(character) {
+        let tScale = ((character.yp * scaledImageHeight()) - (character.shape.minYP * scaledImageHeight())) / ((character.shape.maxYP * scaledImageHeight()) - (character.shape.minYP * scaledImageHeight())) * (character.shape.nearScale - character.shape.farScale) + character.shape.farScale;
+
+        let yTop = (character.yp * scaledImageHeight()) - interactables[0].size;
+        let yBottom = character.yp * scaledImageHeight();
+
+        let s = (character.width / 2) * tScale;
+        let xLeft = character.xp * scaledImageWidth() - s;
+        let xRight = character.xp * scaledImageWidth() + s;
+
+        return interactables.filter(function(interactable) {
+          let iX = interactable.xp * scaledImageWidth();
+          let iY = interactable.yp * scaledImageHeight();
+
+          return (iY >= yTop && iY <= yBottom && iX <= xRight && iX >= xLeft);
+        });
+      }).flat();
+    }
+
     function sortedDrawables() {
       return characters.concat(shapes.filter(function(shape) { return shape.floorOrMask == 'mask'; })).map(function(elem) {
         if (elem.tiles) {
           let sortedTiles = [...elem.tiles].sort(function(a, b) {
-              if (a.y + a.size < b.y + b.size) {
+              if ((a.yp * scaledImageHeight()) + a.size < (b.yp * scaledImageHeight()) + b.size) {
                 return 1;
-              } else if (a.y + a.size > b.y + b.size) {
+              } else if ((a.yp * scaledImageHeight()) + a.size > (b.yp * scaledImageHeight()) + b.size) {
                 return -1;
               } else {
                 return 0;
@@ -505,7 +888,7 @@
           return {
             elem: elem,
             type: 'mask',
-            bottom: sortedTiles[0].y + sortedTiles[0].size
+            bottom: (sortedTiles[0].yp * scaledImageHeight()) + sortedTiles[0].size
           };
         } else {
           let tScale = ((elem.yp * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) / ((elem.shape.maxYP * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) * (elem.shape.nearScale - elem.shape.farScale) + elem.shape.farScale;
@@ -565,7 +948,13 @@
             }
           });
 
-          if (isIn) tiles.push({x: square[0].x, y: square[0].y, size: 5});
+          if (isIn) {
+            tiles.push({
+              xp: square[0].x / scaledImageWidth(),
+              yp: square[0].y / scaledImageHeight(),
+              size: 5
+            });
+          }
 
           x = x + 5;
         }
@@ -617,6 +1006,15 @@
     window.onresize = function() {
       calculateImageSize();
       resize();
+
+      idealPlacingWidth = null;
+      idealPlacingHeight = null;
+      idealInteractablePlacingSize = null;
+
+      shapes.filter(function(shape) { return shape.tiles; }).forEach(function(shape) {
+        shape.tiles = tileMask(shape);
+      });
+
       draw();
     }
 
@@ -631,6 +1029,10 @@
       imgs[1].src = "mario1.png";
       imgs[2].src = "mario2.png";
       backgroundImage.src = "courtyard.jpeg";
+
+      interactableTemplates.forEach(function(t) {
+        t.image.src = `${t.name}.png`;
+      });
     }
 
     function calculateImageSize() {
