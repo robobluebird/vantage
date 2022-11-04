@@ -69,6 +69,18 @@
       height:auto;
       width:auto;
     }
+
+    .blip {
+      background-color: white;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      padding: 5px;
+      border: 1px dashed black;
+      border-radius: 5px;
+      margin: 5px;
+      padding: 5px;
+    }
   </style>
 
   <link rel="manifest" href="site.webmanifest" />
@@ -148,15 +160,17 @@
         image: new Image()
       }
     ];
+
     const masks = [];
     const keys = {
       up: false,
       down: false,
       left: false,
-      right: false
+      right: false,
+      interact: false
     };
-    const imgs = [new Image(), new Image(), new Image()];
 
+    const imgs = [new Image(), new Image(), new Image()];
     const backgroundImage = new Image();
     const backgroundWidth = 0;
     const backgroundHeight = 0;
@@ -176,6 +190,8 @@
     let idealPlacingWidth;
     let idealPlacingHeight;
     let idealInteractablePlacingSize;
+    let interactableBox;
+    let showingInteractables = false;
 
     function resetForms() {
       ['link', 'text', 'upload'].forEach(function(type) {
@@ -716,8 +732,23 @@
         }
       });
 
+      let ci = collidingInteractables();
+
       interactables.forEach(function(interactable) {
         let image = interactableTemplates.filter(function(template) { return template.name == interactable.type; })[0].image;
+
+        if (ci.findIndex(function(c) { return c == interactable; }) != -1) {
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(255, 0, 0, 1.0)";
+          ctx.arc(
+            interactable.xp * scaledImageWidth(),
+            interactable.yp * scaledImageHeight(),
+            interactable.size * 0.75,
+            0,
+            2 * Math.PI
+          );
+          ctx.fill();
+        }
 
         drawImage(
           ctx,
@@ -808,6 +839,7 @@
         ctx.globalAlpha = 1.0;
       }
 
+      /**
       let cInts = collidingInteractables();
 
       if (cInts.length > 0) {
@@ -820,7 +852,6 @@
         });
       } else {
         let msgs = document.querySelector('#messages');
-
         [...msgs.querySelectorAll('.message')].forEach(function(msg) { msg.remove() });
       }
 
@@ -845,6 +876,7 @@
           }
         }
       });
+      */
     }
 
     function getRandomInt(max) {
@@ -1101,13 +1133,50 @@
     }
 
     const t = setInterval(function() {
-      if (characters.length === 0) return;
+      if (characters.length === 0) {
+        keys.up = false;
+        keys.down = false;
+        keys.left = false;
+        keys.right = false;
+        keys.interact = false;
+        return;
+      }
 
       let newXP = characters[0].xp;
       let newYP = characters[0].yp;
       let xInc = (5 / scaledImageWidth());
       let yInc = (5 / scaledImageHeight());
       let changed = false;
+
+      if (keys.interact) {
+        if (showingInteractables) {
+          interactableBox.remove();
+          showingInteractables = false;
+        } else {
+          if (collidingInteractables().length > 0) {
+            interactableBox = document.createElement('div');
+            interactableBox.className = "blip";
+
+            let ci = collidingInteractables()[0];
+
+            if (ci.type == 'link') {
+              let a = document.createElement('a');
+              let linkText = document.createTextNode(ci.data.description);
+              a.href = ci.data.url;
+              a.target = '_blank';
+              a.appendChild(linkText);
+
+              interactableBox.appendChild(a);
+              document.body.appendChild(interactableBox);
+            }
+
+            showingInteractables = true;
+          }
+        }
+
+        console.log('blep');
+        keys.interact = false;
+      }
 
       if (keys.up) {
         newYP = newYP - yInc;
@@ -1229,6 +1298,9 @@
         case "d":
         case "D":
           keys.right = false;
+          break;
+        case "Enter":
+          keys.interact = true;
           break;
       };
     });
