@@ -1,0 +1,141 @@
+<html>
+<head>
+  <style>
+    html, body {
+      width:  100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    #controls {
+      position: absolute;
+      top: 10;
+      left: 10;
+      z-index: 1;
+    }
+
+    #linkForm {
+      position: absolute;
+      display: none;
+      left: 0;
+      top: 0;
+      z-index: 1;
+    }
+
+    #textForm {
+      position: absolute;
+      right: 0;
+      top: 0;
+      z-index: 1;
+    }
+
+    #uploadForm {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+    }
+
+    #shapeEditor {
+      background-color: lightgrey;
+    }
+
+    #controls button, #shapeEditor button, #shapeEditor label,
+    #shapeEditor input, #linkForm input, #linkForm textarea,
+    #uploadForm input, #textForm textarea {
+      display: block;
+    }
+
+    #messages {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 20%;
+      height: 100%;
+      padding: 5px;
+    }
+
+    #messages .message {
+      position: relative;
+      border: 1px solid black;
+      border-radius: 5px;
+      margin: 5px 0 0 0;
+      padding: 5px;
+    }
+
+    #messages .message img {
+      max-height:100%;
+      max-width:100%;
+      height:auto;
+      width:auto;
+    }
+
+    .blip {
+      background-color: white;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      padding: 5px;
+      border: 1px dashed black;
+      border-radius: 5px;
+      margin: 5px;
+      padding: 5px;
+    }
+  </style>
+
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="mask-icon" href="favicon.ico" color="#000000">
+</head>
+<body>
+  <div id="messages"></div>
+  <div id="controls">
+    <button onclick="placeCharacter()" id="placeCharacter" disabled=true>place character</button>
+    <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
+    <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
+    <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
+    <button onClick="addWarp()" id="addWarp" disabled=true>add warp</button>
+    <button onClick="addLink()" id="addLink">add link</button>
+    <button onClick="addText()" id="addText">add text</button>
+    <button onClick="addImage()" id="addImage">add image</button>
+    <button onClick="addAudio()" id="addAudio">add audio</button>
+    <button onClick="addVideo()" id="addVideo">add video</button>
+    <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
+    <div id="shapeEditor" style="display: none;">
+      <label for="nearScale">near scale</label>
+      <input type="number" id="nearScale" onchange="nearScaleChanged(this);"></input>
+      <label for="farScale">far scale</label>
+      <input type="number" id="farScale" onchange="farScaleChanged(this);"></input>
+      <label for="shapeType">type</label>
+      <select id="shapeType" onchange="shapeTypeChanged(this)">
+        <option value="floor">floor</option>
+        <option value="mask">mask</option>
+        <option value="block">block</option>
+        <option value="warp">warp</option>
+      </select>
+      <button disabled=true id="saveScales" onclick="saveScales()">save</button>
+      <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
+    </div>
+  </div>
+  <div id="textForm">
+    <textarea placeholder="text content..." style="resize: none;" cols=18 rows=5></textarea>
+  </div>
+  <div id="linkForm">
+    <input id="url" type="text" placeholder="link...">
+    <textarea id="urlDescription" placeholder="description..." style="resize: none;" cols=18 rows=5></textarea>
+    <button>go</button>
+    <button>cancel</button>
+  </div>
+  <div id="uploadForm">
+    <form>
+      <input type="file"/>
+      <input type="submit" value="upload"/>
+    </form>
+  </div>
+  <canvas id="canvas" style="z-index: 0; position: relative; background-color:blue;">
+  </canvas>
+  <script type="text/javascript">
+  </script>
+</body>
+<script src="v.js"></script>
+</html>
