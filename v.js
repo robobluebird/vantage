@@ -553,10 +553,18 @@ function draw() {
         for (let n = 0; n < shapes.length; n++) {
             ctx.beginPath();
 
-            if (shapes[n].type == 'floor') {
-                ctx.fillStyle = "rgba(0, 255, 0, 0.5)";
+            if (editingShapes && currentEditingShape) {
+                if (shapes[n] == currentEditingShape) {
+                    ctx.fillStyle = "rgba(0, 255, 0, 1.0)";
+                } else {
+                    ctx.fillStyle = "rgba(220, 220, 220, 0.5)";
+                }
             } else {
-                ctx.fillStyle = "rgba(0, 0, 255, 0.5)";
+                if (shapes[n].type == 'floor') {
+                    ctx.fillStyle = "rgba(0, 255, 0, 0.5)";
+                } else {
+                    ctx.fillStyle = "rgba(0, 0, 255, 0.5)";
+                }
             }
 
             ctx.moveTo(shapes[n].points[0].xp * scaledImageWidth(), shapes[n].points[0].yp * scaledImageHeight());
@@ -1089,46 +1097,47 @@ const t = setInterval(function () {
     }
 
     if (changed) {
-        let xShape, yShape;
+        let xShapes = {};
+        let yShapes = {};
 
         shapes.filter(function (shape) {
             return shape.type == 'floor' || shape.type == 'block' || shape.type == 'warp';
-        }).every(function (shape) {
+        }).forEach(function (shape) {
             if (adaptedPointIsInPolygon({ x: newXP * scaledImageWidth(), y: characters[0].yp * scaledImageHeight() }, shape.points)) {
-                xShape = shape;
-
-                if (xShape && yShape) return false;
+                xShapes[shape.type] = shape;
             }
 
             if (adaptedPointIsInPolygon({ x: characters[0].xp * scaledImageWidth(), y: newYP * scaledImageHeight() }, shape.points)) {
-                yShape = shape;
-
-                if (xShape && yShape) return false;
+                yShapes[shape.type] = shape;
             }
-
-            return true;
         });
 
-        let enteringWarp = false;
+        let foundWarp, xShape, yShape;
 
-        if (xShape) {
-            if (xShape.type == 'floor') {
-                characters[0].xp = newXP;
-            } else if (xShape.type == 'warp') {
-                enteringWarp = true;
-            }
+        if (xShapes['block']) {
+            // do nothing right now
+        } else if (xShapes['warp']) {
+            foundWarp = xShapes['warp'];
+        } else if (xShapes['floor']) {
+            characters[0].xp = newXP;
+            xShape = xShapes['floor'];
         }
 
-        if (yShape) {
-            if (yShape.type == 'floor') {
-                characters[0].yp = newYP;
-            } else if (yShape.type == 'warp') {
-                enteringWarp = true;
-            }
+        if (yShapes['block']) {
+            // do nothing right now
+        } else if (yShapes['warp']) {
+            foundWarp = yShapes['warp'];
+        } else if (yShapes['floor']) {
+            characters[0].yp = newYP;
+            yShape = yShapes['floor'];
         }
 
-        if (enteringWarp) {
-        } else if (xShape && yShape && xShape.type == 'floor' && yShape.type == 'floor' && xShape == yShape && xShape != characters[0].shape) {
+        if (foundWarp) {
+            // do a warp
+        } else if (xShape &&
+                   yShape &&
+                   xShape == yShape &&
+                   xShape != characters[0].shape) {
             characters[0].shape = xShape;
         }
     } else {
