@@ -58,6 +58,70 @@ let idealInteractablePlacingSize;
 let interactableBox;
 let showingInteractables = false;
 
+function showMedia() {
+    let div = document.createElement('div');
+    div.style.width = scaledImageWidth() / 2;
+    div.style.height = scaledImageHeight() / 2;
+    div.style.backgroundColor = 'white';
+    div.style.borderRadius = '5px';
+    div.style.position = 'absolute';
+    div.style.top = scaledImageHeight() / 4;
+    div.style.left = scaledImageWidth() / 4;
+    div.style.padding = '5px';
+    div.style.display = 'flex';
+    div.style.justifyContent = 'center';
+    div.style.alignItems = 'center';
+    div.style.background = 'repeating-linear-gradient(45deg,#606dbc,#606dbc 10px,#465298 10px,#465298 20px';
+
+    /**
+    let img = document.createElement('img');
+    img.src = 'house.png';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    div.appendChild(img);
+    */
+
+    /**
+    let audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = "zzz.mp3";
+    audio.style.margin = 'auto';
+    div.appendChild(audio);
+    */
+
+    /**
+    let video = document.createElement('video');
+    video.style.width = '100%';
+    video.style.height = '100%';
+    video.controls = true;
+
+    let source = document.createElement('source');
+    source.src = 'a-ok.mp4';
+    source.type = 'video/mp4';
+
+    video.appendChild(source);
+    div.appendChild(video);
+    */
+
+    /**
+    let a = document.createElement('a');
+    a.style.backgroundColor = 'white';
+    a.href = 'http://www.asdf.com';
+    a.target = '_blank';
+    a.innerText = 'http://www.asdf.com';
+    div.appendChild(a);
+    */
+
+    /**
+    let p = document.createElement('p');
+    p.style.backgroundColor = 'white';
+    p.innerText = 'and never was a word of harm said, though many were thought. the consequences or fear of them were too great.'
+    div.appendChild(p);
+    */
+
+    document.body.appendChild(div);
+}
+
 function resetForms() {
     ['link', 'text', 'upload'].forEach(function (type) {
         let form = document.querySelector(`#${type}Form`);
