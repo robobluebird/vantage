@@ -14,26 +14,16 @@
       z-index: 1;
     }
 
-    #linkForm {
-      position: absolute;
+    .linkForm {
       display: none;
-      left: 0;
-      top: 0;
-      z-index: 1;
     }
 
-    #textForm {
-      position: absolute;
-      right: 0;
-      top: 0;
-      z-index: 1;
+    .textForm {
+      display: none;
     }
 
-    #uploadForm {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      z-index: 1;
+    .audioForm {
+      display: none;
     }
 
     #shapeEditor {
@@ -41,45 +31,18 @@
     }
 
     #controls button, #shapeEditor button, #shapeEditor label,
-    #shapeEditor input, #linkForm input, #linkForm textarea,
-    #uploadForm input, #textForm textarea {
+    #shapeEditor input, .linkForm input, .linkForm textarea,
+    #uploadForm input, .textForm textarea {
       display: block;
     }
 
-    #messages {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 20%;
-      height: 100%;
-      padding: 5px;
-    }
-
-    #messages .message {
-      position: relative;
-      border: 1px solid black;
+    .stripey {
+      padding: 10px;
       border-radius: 5px;
-      margin: 5px 0 0 0;
-      padding: 5px;
-    }
-
-    #messages .message img {
-      max-height:100%;
-      max-width:100%;
-      height:auto;
-      width:auto;
-    }
-
-    .blip {
-      background-color: white;
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      padding: 5px;
-      border: 1px dashed black;
-      border-radius: 5px;
-      margin: 5px;
-      padding: 5px;
+      background: repeating-linear-gradient(45deg,#606dbc,#606dbc 10px,#465298 10px,#465298 20px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
   </style>
 
@@ -95,11 +58,9 @@
     <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
     <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
     <button onClick="addWarp()" id="addWarp" disabled=true>add warp</button>
-    <button onClick="addLink()" id="addLink">add link</button>
-    <button onClick="addText()" id="addText">add text</button>
-    <button onClick="addImage()" id="addImage">add image</button>
-    <button onClick="addAudio()" id="addAudio">add audio</button>
-    <button onClick="addVideo()" id="addVideo">add video</button>
+    <button onClick="addInteractable('link');" id="addLink">add link</button>
+    <button onClick="addInteractable('text');" id="addText">add text</button>
+    <button onClick="addInteractable('audio')" id="addAudio">add audio</button>
     <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
     <button onClick="showMedia()">test media</button>
     <div id="shapeEditor" style="display: none;">
@@ -118,21 +79,23 @@
       <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
     </div>
   </div>
-  <div id="textForm">
+  <div class="textForm proto">
     <textarea placeholder="text content..." style="resize: none;" cols=18 rows=5></textarea>
+    <button class="go">go</button>
+    <button class="cancel">cancel</button>
   </div>
-  <div id="linkForm">
-    <input id="url" type="text" placeholder="link...">
-    <textarea id="urlDescription" placeholder="description..." style="resize: none;" cols=18 rows=5></textarea>
-    <button>go</button>
-    <button>cancel</button>
+  <div class="linkForm proto">
+    <input class="url" type="text" placeholder="link...">
+    <textarea class="urlDescription" placeholder="description..." style="resize: none;" cols=18 rows=5></textarea>
+    <button class="go">go</button>
+    <button class="cancel">cancel</button>
   </div>
-  <div id="uploadForm">
-    <form>
-      <input type="file"/>
-      <input type="submit" value="upload"/>
-    </form>
-  </div>
+  <form class="audioForm proto">
+    <label>choose a file</label>
+    <input type="file" accept="audio/*"/>
+    <input type="submit" value="go"/>
+    <button class="cancel">cancel</button>
+  </form>
   <canvas id="canvas" style="z-index: 0; position: relative; background-color:blue;">
   </canvas>
   <script type="text/javascript">

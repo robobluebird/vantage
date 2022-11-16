@@ -1,3 +1,5 @@
+let mediaType = 0;
+
 const canvas = document.getElementById("canvas");
 const points = [];
 const shapes = [];
@@ -13,15 +15,7 @@ const interactableTemplates = [
         image: new Image()
     },
     {
-        name: 'image',
-        image: new Image()
-    },
-    {
         name: 'audio',
-        image: new Image()
-    },
-    {
-        name: 'video',
         image: new Image()
     }
 ];
@@ -58,77 +52,110 @@ let idealInteractablePlacingSize;
 let interactableBox;
 let showingInteractables = false;
 
-function showMedia() {
+function showMediaWithElement(element) {
+    let old = document.querySelector('#mediaBox');
+
+    if (old) old.remove();
+
+    let box = document.createElement('div');
+    box.id = 'mediaBox';
+    box.style.width = `${scaledImageWidth()}px`;
+    box.style.height = `${scaledImageHeight()}px`;
+    box.style.position = 'absolute';
+    box.style.top = 0;
+    box.style.left = 0;
+    box.style.display = 'flex';
+    box.style.justifyContent = 'center';
+    box.style.alignItems = 'center';
+    box.style.padding = '10px 10px 10px 10px';
+
     let div = document.createElement('div');
-    div.style.width = scaledImageWidth() / 2;
-    div.style.height = scaledImageHeight() / 2;
-    div.style.backgroundColor = 'white';
-    div.style.borderRadius = '5px';
-    div.style.position = 'absolute';
-    div.style.top = scaledImageHeight() / 4;
-    div.style.left = scaledImageWidth() / 4;
-    div.style.padding = '5px';
-    div.style.display = 'flex';
-    div.style.justifyContent = 'center';
-    div.style.alignItems = 'center';
-    div.style.background = 'repeating-linear-gradient(45deg,#606dbc,#606dbc 10px,#465298 10px,#465298 20px';
+    div.className = 'stripey';
 
-    /**
-    let img = document.createElement('img');
-    img.src = 'house.png';
-    img.style.width = '100%';
-    img.style.height = '100%';
-    div.appendChild(img);
-    */
+    element.style.padding = '0';
+    element.style.margin = '0';
 
-    /**
-    let audio = document.createElement('audio');
-    audio.controls = true;
-    audio.src = "zzz.mp3";
-    audio.style.margin = 'auto';
-    div.appendChild(audio);
-    */
+    div.appendChild(element);
+    box.appendChild(div);
 
-    /**
-    let video = document.createElement('video');
-    video.style.width = '100%';
-    video.style.height = '100%';
-    video.controls = true;
+    document.body.appendChild(box);
+}
 
-    let source = document.createElement('source');
-    source.src = 'a-ok.mp4';
-    source.type = 'video/mp4';
+function showMediaWithData(data) {
+    let old = document.querySelector('#mediaBox');
 
-    video.appendChild(source);
-    div.appendChild(video);
-    */
+    if (old) old.remove();
 
-    /**
-    let a = document.createElement('a');
-    a.style.backgroundColor = 'white';
-    a.href = 'http://www.asdf.com';
-    a.target = '_blank';
-    a.innerText = 'http://www.asdf.com';
-    div.appendChild(a);
-    */
+    let box = document.createElement('div');
+    box.id = 'mediaBox';
+    box.style.width = `${scaledImageWidth()}px`;
+    box.style.height = `${scaledImageHeight()}px`;
+    box.style.position = 'absolute';
+    box.style.top = 0;
+    box.style.left = 0;
+    box.style.display = 'flex';
+    box.style.justifyContent = 'center';
+    box.style.alignItems = 'center';
+    box.style.padding = '10px 10px 10px 10px';
 
-    /**
-    let p = document.createElement('p');
-    p.style.backgroundColor = 'white';
-    p.innerText = 'and never was a word of harm said, though many were thought. the consequences or fear of them were too great.'
-    div.appendChild(p);
-    */
+    let div = document.createElement('div');
+    div.className = 'stripey';
 
-    document.body.appendChild(div);
+    let e;
+    switch(data.type) {
+        case 'upload':
+            e = document.querySelector('#uploadForm').cloneNode(true);
+            let form = e.querySelector('form');
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                // do something if you want.
+                return false;
+            };
+            e.style.display = 'block';
+            e.style.position = 'relative';
+            break;
+        case 'audio':
+            e = document.createElement('audio');
+            e.controls = true;
+            if (!data.data.objectURL) data.data.objectURL = URL.createObjectURL(data.data.file);
+            e.src = data.data.objectURL;
+            break;
+        case 'link':
+            e = document.createElement('a');
+            e.href = data.data.url;
+            e.target = '_blank';
+            e.innerText = data.data.description || data.data.url;
+            break;
+        case 'text':
+            e = document.createElement('p');
+            e.innerText = data.data.text;
+            div.style.width = `${scaledImageWidth() / 2}px`;
+            div.style.maxHeight = `${scaledImageHeight() / 2}px`;
+            break;
+    }
+
+    e.style.backgroundColor = 'white';
+    e.style.margin = '0';
+    e.style.padding = '0';
+
+    div.appendChild(e);
+    box.appendChild(div);
+
+    document.body.appendChild(box);
 }
 
 function resetForms() {
-    ['link', 'text', 'upload'].forEach(function (type) {
-        let form = document.querySelector(`#${type}Form`);
-        form.style.left = 0;
-        form.style.top = 0;
-        form.style.display = 'none';
-    });
+    let mb = document.querySelector('#mediaBox');
+
+    if (mb) {
+        mb.remove();
+        placingInteractable = null;
+        configuringInteractable = null;
+        makeShapes();
+        return true;
+    } else {
+        return false;
+    }
 }
 
 function saveScales() {
@@ -218,16 +245,27 @@ function finishPlacingInteractable() {
     }
 
     let data = {};
+    let form;
 
     switch (configuringInteractable.type) {
         case 'link':
-            let url = getValidUrl(document.querySelector('#url').value);
+            form = document.querySelector('.linkForm:not(.proto)');
+            let url = getValidUrl(form.querySelector('.url').value);
             data.url = url;
-            data.description = document.querySelector('#urlDescription').value || url;
+            data.description = form.querySelector('.urlDescription').value || url;
+            break;
+        case 'text':
+            form = document.querySelector('.textForm:not(.proto)');
+            data.text = form.querySelector('textarea').value;
+            break;
+        case 'audio':
+            form = document.querySelector('.audioForm:not(.proto)');
+            data.file = form.querySelector('input[type=file]').files[0];
             break;
     }
 
     interactables.push({
+        objectType: 'interactable',
         id: generateUUID(),
         type: configuringInteractable.type,
         data: data,
@@ -241,7 +279,6 @@ function finishPlacingInteractable() {
     configuringInteractable = null;
     canvas.onmousemove = null;
 
-    resetForms();
     clearEditValues();
     makeShapes();
 }
@@ -265,15 +302,56 @@ function generateUUID() { // Public Domain/MIT
 canvas.onclick = function (e) {
     if (placingInteractable) {
         if (placingInteractable == 'link') {
-            let form = document.querySelector('#linkForm');
-
+            let form = document.querySelector('.linkForm').cloneNode(true);
+            form.classList.remove('proto');
             form.style.display = 'block';
-            form.style.left = e.clientX - form.offsetWidth;
-            form.style.top = e.clientY - form.offsetHeight;
-            form.querySelector('button').onclick = finishPlacingInteractable;
+            form.style.position = 'relative';
+            form.querySelector('button.go').onclick = finishPlacingInteractable;
+            form.querySelector('button.cancel').onclick = makeShapes;
+
+            showMediaWithElement(form);
 
             configuringInteractable = {
-                type: 'link',
+                type: placingInteractable,
+                x: e.clientX,
+                y: e.clientY
+            };
+
+            placingInteractable = null;
+        } else if (placingInteractable == 'text') {
+            let form = document.querySelector('.textForm').cloneNode(true);
+            form.classList.remove('proto');
+            form.style.display = 'block';
+            form.style.position = 'relative';
+            form.querySelector('button.go').onclick = finishPlacingInteractable;
+            form.querySelector('button.cancel').onclick = makeShapes;
+
+            showMediaWithElement(form);
+
+            configuringInteractable = {
+                type: placingInteractable,
+                x: e.clientX,
+                y: e.clientY
+            };
+
+            placingInteractable = null;
+        } else if (placingInteractable == 'audio') {
+            let form = document.querySelector('.audioForm').cloneNode(true);
+            form.classList.remove('proto');
+            form.style.display = 'block';
+            form.style.position = 'relative';
+            form.style.backgroundColor = 'white';
+            form.onsubmit = function(e) {
+                e.preventDefault();
+                finishPlacingInteractable();
+                return false;
+            };
+            form.querySelector('button.cancel').onclick = makeShapes;
+
+            showMediaWithElement(form);
+
+            configuringInteractable = {
+                type: placingInteractable,
                 x: e.clientX,
                 y: e.clientY
             };
@@ -341,6 +419,7 @@ canvas.onclick = function (e) {
                 }
 
                 characters.push({
+                    objectType: 'character',
                     images: imgs,
                     xp: e.clientX / scaledImageWidth(),
                     yp: e.clientY / scaledImageHeight(),
@@ -383,6 +462,7 @@ canvas.onclick = function (e) {
                 });
 
                 shapes.push({
+                    objectType: 'shape',
                     nearScale: 1.0,
                     farScale: 0.5,
                     points: points.splice(0, points.length).map(function (point) { return { xp: point.x / scaledImageWidth(), yp: point.y / scaledImageHeight() }; }),
@@ -413,11 +493,16 @@ function scaledImageHeight() {
     return backgroundImage.naturalHeight * scale;
 }
 
-function addLink() {
+function capitalize(word) {
+    let lower = word.toLowerCase();
+    return word.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+function addInteractable(type) {
     placingCharacter = false;
     makingShapes = false;
     editingShapes = false;
-    placingInteractable = 'link';
+    placingInteractable = type;
     configuringInteractable = null;
 
     clearEditValues();
@@ -425,7 +510,7 @@ function addLink() {
 
     document.getElementById("placeCharacter").disabled = false;
     document.getElementById("makeShapes").disabled = false;
-    document.getElementById("addLink").disabled = true;
+    document.getElementById(`add${capitalize(type)}`).disabled = true;
 
     if (shapes.length > 0) {
         document.getElementById("editShapes").disabled = false;
@@ -442,6 +527,9 @@ function addLink() {
     }
 
     draw();
+}
+
+function addLink() {
 }
 
 function makeShapes() {
@@ -527,7 +615,6 @@ function clearPoints() {
     document.getElementById("shapeEditor").style.display = "none";
 
     clearEditValues();
-    resetForms();
     makeShapes();
 
     draw();
@@ -546,9 +633,7 @@ function toggleGuides() {
         document.getElementById("addWarp").style.display = "none";
         document.getElementById("addLink").style.display = "none";
         document.getElementById("addText").style.display = "none";
-        document.getElementById("addImage").style.display = "none";
         document.getElementById("addAudio").style.display = "none";
-        document.getElementById("addVideo").style.display = "none";
         document.getElementById("toggleGuides").innerText = "show guides";
         showGuides = false;
         draw();
@@ -562,9 +647,7 @@ function toggleGuides() {
         document.getElementById("addWarp").style.display = "block";
         document.getElementById("addLink").style.display = "block";
         document.getElementById("addText").style.display = "block";
-        document.getElementById("addImage").style.display = "block";
         document.getElementById("addAudio").style.display = "block";
-        document.getElementById("addVideo").style.display = "block";
         document.getElementById("toggleGuides").innerText = "hide guides";
         showGuides = true;
         makeShapes();
@@ -593,9 +676,7 @@ function draw() {
                 }
             });
         });
-    }
-
-    if (showGuides) {
+    } else {
         ctx.fillStyle = "rgba(255, 0, 0, 1.0)";
 
         if (points.length > 0) {
@@ -650,8 +731,10 @@ function draw() {
         });
     }
 
+    let ci = collidingInteractables();
+
     sortedDrawables().forEach(function (drawable) {
-        if (drawable.elem.images) {
+        if (drawable.type == 'character') {
             drawImage(
                 ctx,
                 drawable.elem.images[drawable.elem.frame == 0 ? 0 : (drawable.elem.frame < 3 ? 1 : 2)],
@@ -662,44 +745,36 @@ function draw() {
                 0,
                 drawable.elem.flip
             );
-        } else if (!showGuides && drawable.elem.tiles) {
+        } else if (!showGuides && drawable.type == 'mask') {
             drawable.elem.tiles.forEach(function (tile) {
                 ctx.putImageData(tile.data, tile.xp * scaledImageWidth(), tile.yp * scaledImageHeight());
             });
-        }
-    });
+        } else if (drawable.type == 'interactable') {
+            let interactable = drawable.elem;
+            let image = interactableTemplates.filter(function (template) { return template.name == interactable.type; })[0].image;
 
-    let ci = collidingInteractables();
+            if (ci.findIndex(function (c) { return c == interactable; }) != -1) {
+                ctx.beginPath();
+                ctx.fillStyle = "rgba(255, 0, 0, 1.0)";
+                ctx.arc(
+                    interactable.xp * scaledImageWidth(),
+                    interactable.yp * scaledImageHeight(),
+                    interactable.size * 0.75,
+                    0,
+                    2 * Math.PI
+                );
+                ctx.fill();
+            }
 
-    if (ci.length == 0 && showingInteractables) {
-        interactableBox.remove();
-        showingInteractables = false;
-    }
-
-    interactables.forEach(function (interactable) {
-        let image = interactableTemplates.filter(function (template) { return template.name == interactable.type; })[0].image;
-
-        if (ci.findIndex(function (c) { return c == interactable; }) != -1) {
-            ctx.beginPath();
-            ctx.fillStyle = "rgba(255, 0, 0, 1.0)";
-            ctx.arc(
-                interactable.xp * scaledImageWidth(),
-                interactable.yp * scaledImageHeight(),
-                interactable.size * 0.75,
-                0,
-                2 * Math.PI
+            drawImage(
+                ctx,
+                image,
+                (interactable.xp * scaledImageWidth()) - (interactable.size / 2),
+                (interactable.yp * scaledImageHeight()) - (interactable.size / 2),
+                interactable.size,
+                interactable.size
             );
-            ctx.fill();
         }
-
-        drawImage(
-            ctx,
-            image,
-            (interactable.xp * scaledImageWidth()) - (interactable.size / 2),
-            (interactable.yp * scaledImageHeight()) - (interactable.size / 2),
-            interactable.size,
-            interactable.size
-        );
     });
 
     if (placingCharacter) {
@@ -780,45 +855,6 @@ function draw() {
 
         ctx.globalAlpha = 1.0;
     }
-
-    /**
-    let cInts = collidingInteractables();
-
-    if (cInts.length > 0) {
-      let msgs = document.querySelector('#messages');
-      
-      [...msgs.querySelectorAll('.message')].filter(function(msg) {
-        return cInts.findIndex(function(ci) { return msg.id.split('message')[1] == ci.id }) == -1;
-      }).forEach(function(msg) {
-        msg.remove();
-      });
-    } else {
-      let msgs = document.querySelector('#messages');
-      [...msgs.querySelectorAll('.message')].forEach(function(msg) { msg.remove() });
-    }
-
-    cInts.forEach(function(ci) {
-      let msgs = document.querySelector('#messages');
-      let msg = msgs.querySelector(`#message${ci.id}`);
-
-      if (!msg) {
-        if (ci.type == 'link') {
-          let m = document.createElement('div');
-          m.className = "message";
-          m.id = `message${ci.id}`;
-
-          let a = document.createElement('a');
-          let linkText = document.createTextNode(ci.data.description);
-          a.href = ci.data.url;
-          a.target = '_blank';
-          a.appendChild(linkText);
-
-          m.appendChild(a);
-          msgs.appendChild(m);
-        }
-      }
-    });
-    */
 }
 
 function getRandomInt(max) {
@@ -848,8 +884,8 @@ function collidingInteractables() {
 }
 
 function sortedDrawables() {
-    return characters.concat(shapes.filter(function (shape) { return shape.type == 'mask'; })).map(function (elem) {
-        if (elem.tiles) {
+    return characters.concat(interactables).concat(shapes.filter(function (shape) { return shape.type == 'mask'; })).map(function (elem) {
+        if (elem.objectType == 'shape') {
             let sortedTiles = [...elem.tiles].sort(function (a, b) {
                 if ((a.yp * scaledImageHeight()) + a.size < (b.yp * scaledImageHeight()) + b.size) {
                     return 1;
@@ -864,7 +900,7 @@ function sortedDrawables() {
                 type: 'mask',
                 bottom: (sortedTiles[0].yp * scaledImageHeight()) + sortedTiles[0].size
             };
-        } else {
+        } else if (elem.objectType == 'character') {
             let tScale = ((elem.yp * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) / ((elem.shape.maxYP * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) * (elem.shape.nearScale - elem.shape.farScale) + elem.shape.farScale;
 
             return {
@@ -876,6 +912,12 @@ function sortedDrawables() {
                 height: elem.height * tScale,
                 bottom: ((elem.yp * scaledImageHeight()) - (elem.height * tScale)) + (elem.height * tScale)
             };
+        } else if (elem.objectType == 'interactable') {
+            return {
+                elem: elem,
+                type: 'interactable',
+                bottom: (elem.yp * scaledImageHeight()) + (elem.size / 2)
+            }
         }
     }).sort(function (a, b) {
         if (a.bottom < b.bottom) {
@@ -1091,26 +1133,13 @@ const t = setInterval(function () {
 
     if (keys.interact) {
         if (showingInteractables) {
-            interactableBox.remove();
+            resetForms();
             showingInteractables = false;
         } else {
-            if (collidingInteractables().length > 0) {
-                interactableBox = document.createElement('div');
-                interactableBox.className = "blip";
-
-                let ci = collidingInteractables()[0];
-
-                if (ci.type == 'link') {
-                    let a = document.createElement('a');
-                    let linkText = document.createTextNode(ci.data.description);
-                    a.href = ci.data.url;
-                    a.target = '_blank';
-                    a.appendChild(linkText);
-
-                    interactableBox.appendChild(a);
-                    document.body.appendChild(interactableBox);
-                }
-
+            let ci = collidingInteractables();
+            
+            if (ci.length > 0) {
+                showMediaWithData(ci[0]);
                 showingInteractables = true;
             }
         }
