@@ -51,6 +51,7 @@ let idealPlacingHeight;
 let idealInteractablePlacingSize;
 let interactableBox;
 let showingInteractables = false;
+let choosingLocalWarpPoint = false;
 
 function showMediaWithElement(element) {
     let old = document.querySelector('#mediaBox');
@@ -151,6 +152,7 @@ function resetForms() {
         mb.remove();
         placingInteractable = null;
         configuringInteractable = null;
+        choosingLocalWarpPoint = false;
         makeShapes();
         return true;
     } else {
@@ -173,6 +175,13 @@ function saveScales() {
             } else if (shapeTypeSelectValue == 'mask') {
                 currentEditingShape.tiles = tileMask(currentEditingShape);
             }
+
+            if (shapeTypeSelectValue != 'warp') {
+                currentEditingShape.warpData = null;
+                document.querySelector('#warpExtras').style.display = 'none';
+            } else {
+                document.querySelector('#warpExtras').style.display = 'block';
+            }
         }
 
         document.querySelector('#saveScales').disabled = true;
@@ -182,7 +191,7 @@ function saveScales() {
 
 function deleteShape() {
     if (editingShapes && currentEditingShape) {
-        let index = shapes.findIndex(function (shape) { return shape == currentEditingShape; });
+        let index = shapes.findIndex(function (shape) { return shape.id == currentEditingShape.id; });
 
         if (index > -1) {
             shapes.splice(index, 1);
@@ -198,26 +207,47 @@ function clearEditValues() {
     document.querySelector("#nearScale").value = null;
     document.querySelector("#farScale").value = null;
     document.querySelector("#shapeType").selectedIndex = -1;
+    document.querySelector("#warpType").selectedIndex = -1;
     document.querySelector('#saveScales').disabled = true;
     document.querySelector('#deleteShape').disabled = true;
+}
+
+function chooseWarpExit() {
+}
+
+function warpTypeChanged(elem) {
+    if (editingShapes && currentEditingShape && elem.value != currentEditingShape.warpType) {
+        if (elem.value == 'local') {
+            choosingLocalWarpPoint = true;
+        } else if (elem.value == 'remote') {
+        }
+    }
+
+    draw();
 }
 
 function shapeTypeChanged(elem) {
     if (editingShapes && currentEditingShape && elem.value != currentEditingShape.type) {
         document.querySelector('#saveScales').disabled = false;
     }
+
+    draw();
 }
 
 function nearScaleChanged(elem) {
     if (editingShapes && currentEditingShape && elem.value != currentEditingShape.nearScale) {
         document.querySelector('#saveScales').disabled = false;
     }
+
+    draw();
 }
 
 function farScaleChanged(elem) {
     if (editingShapes && currentEditingShape && elem.value != currentEditingShape.farScale) {
         document.querySelector('#saveScales').disabled = false;
     }
+
+    draw();
 }
 
 function getValidUrl(url) {
@@ -277,6 +307,7 @@ function finishPlacingInteractable() {
     idealInteractablePlacingSize = null;
     placingInteractable = null;
     configuringInteractable = null;
+    choosingLocalWarpPoint = false;
     canvas.onmousemove = null;
 
     clearEditValues();
@@ -300,7 +331,29 @@ function generateUUID() { // Public Domain/MIT
 }
 
 canvas.onclick = function (e) {
-    if (placingInteractable) {
+    if (choosingLocalWarpPoint && currentEditingShape && currentEditingShape.type == 'warp') {
+        let foundWarps = shapes.filter(function (shape) {
+            return adaptedPointIsInPolygon({ x: e.clientX, y: e.clientY }, shape.points) &&
+                   shape.type == 'warp' &&
+                   shape.id != currentEditingShape.id
+        });
+
+        if (foundWarps.length > 0) {
+            let foundWarp = foundWarps[0];
+
+            currentEditingShape.warpData = {
+                type: 'local',
+                id: foundWarp.id
+            };
+
+            foundWarp.warpData = {
+                type: 'local',
+                id: currentEditingShape.id
+            };
+
+            choosingLocalWarpPoint = false;
+        }
+    } else if (placingInteractable) {
         if (placingInteractable == 'link') {
             let form = document.querySelector('.linkForm').cloneNode(true);
             form.classList.remove('proto');
@@ -370,7 +423,7 @@ canvas.onclick = function (e) {
         } else if (clickedShapes.length > 1) {
             if (currentEditingShape) {
                 let index = clickedShapes.findIndex(function (shape) {
-                    return shape == currentEditingShape;
+                    return shape.id == currentEditingShape.id;
                 });
 
                 if (index == -1) index = 0;
@@ -462,13 +515,15 @@ canvas.onclick = function (e) {
                 });
 
                 shapes.push({
+                    id: generateUUID(),
                     objectType: 'shape',
                     nearScale: 1.0,
                     farScale: 0.5,
                     points: points.splice(0, points.length).map(function (point) { return { xp: point.x / scaledImageWidth(), yp: point.y / scaledImageHeight() }; }),
                     minYP: sortedPoints[0].y / scaledImageHeight(),
                     maxYP: sortedPoints[sortedPoints.length - 1].y / scaledImageHeight(),
-                    type: 'floor'
+                    type: 'floor',
+                    warpData: null
                 });
 
                 document.getElementById("placeCharacter").disabled = false
@@ -504,6 +559,7 @@ function addInteractable(type) {
     editingShapes = false;
     placingInteractable = type;
     configuringInteractable = null;
+    choosingLocalWarpPoint = false;
 
     clearEditValues();
     resetForms();
@@ -538,6 +594,7 @@ function makeShapes() {
     editingShapes = false;
     placingInteractable = null;
     configuringInteractable = null;
+    choosingLocalWarpPoint = false;
 
     clearEditValues();
     resetForms();
@@ -565,6 +622,7 @@ function placeCharacter() {
     editingShapes = false;
     placingInteractable = null;
     configuringInteractable = null;
+    choosingLocalWarpPoint = false;
 
     clearEditValues();
     resetForms();
@@ -594,6 +652,7 @@ function editShapes() {
     editingShapes = true;
     placingInteractable = null;
     configuringInteractable = null;
+    choosingLocalWarpPoint = false;
 
     clearEditValues();
     resetForms();
@@ -662,10 +721,8 @@ function resize() {
 
 function draw() {
     let ctx = canvas.getContext("2d");
-    let maskDatas = [];
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     ctx.drawImage(backgroundImage, 0, 0, scaledImageWidth(), scaledImageHeight());
 
     if (!showGuides) {
@@ -699,16 +756,24 @@ function draw() {
             ctx.beginPath();
 
             if (editingShapes && currentEditingShape) {
-                if (shapes[n] == currentEditingShape) {
+                if (shapes[n].id == currentEditingShape.id) {
                     ctx.fillStyle = "rgba(0, 255, 0, 1.0)";
                 } else {
-                    ctx.fillStyle = "rgba(220, 220, 220, 0.5)";
+                    if (choosingLocalWarpPoint && shapes[n].type == 'warp') {
+                        ctx.fillStyle = "rgba(255, 0, 255, 1.0)";
+                    } else {
+                        ctx.fillStyle = "rgba(220, 220, 220, 0.5)";
+                    }
                 }
             } else {
                 if (shapes[n].type == 'floor') {
                     ctx.fillStyle = "rgba(0, 255, 0, 0.5)";
-                } else {
+                } else if (shapes[n].type == 'mask') {
                     ctx.fillStyle = "rgba(0, 0, 255, 0.5)";
+                } else if (shapes[n].type == 'warp') {
+                    ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+                } else if (shapes[n].type == 'block') {
+                    ctx.fillStyle = "rgba(255, 0, 255, 0.5)";
                 }
             }
 
@@ -719,6 +784,17 @@ function draw() {
             }
 
             ctx.fill();
+
+            if (shapes[n].type == 'warp' && shapes[n].warpData && shapes[n].warpData.type == 'local' && shapes[n].warpData.id) {
+                let warpTo = shapes.filter(function(shape) { return shape.id == shapes[n].warpData.id })[0];
+
+                if (warpTo) {
+                    ctx.beginPath();
+                    ctx.moveTo(shapes[n].points[0].xp * scaledImageWidth(), shapes[n].points[0].yp * scaledImageHeight());
+                    ctx.lineTo(warpTo.points[0].xp * scaledImageWidth(), warpTo.points[0].yp * scaledImageHeight());
+                    ctx.stroke();
+                }
+            }
         }
 
         shapes.filter(function (shape) { return shape.tiles; }).forEach(function (shape) {
@@ -1229,8 +1305,8 @@ const t = setInterval(function () {
             // do a warp
         } else if (xShape &&
                    yShape &&
-                   xShape == yShape &&
-                   xShape != characters[0].shape) {
+                   xShape.id == yShape.id &&
+                   xShape.id != characters[0].shape.id) {
             characters[0].shape = xShape;
         }
     } else {

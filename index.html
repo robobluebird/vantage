@@ -57,24 +57,32 @@
     <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
     <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
     <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
-    <button onClick="addWarp()" id="addWarp" disabled=true>add warp</button>
-    <button onClick="addInteractable('link');" id="addLink">add link</button>
-    <button onClick="addInteractable('text');" id="addText">add text</button>
-    <button onClick="addInteractable('audio')" id="addAudio">add audio</button>
+    <button onclick="addWarp()" id="addWarp" disabled=true>add warp</button>
+    <button onclick="addInteractable('link');" id="addLink">add link</button>
+    <button onclick="addInteractable('text');" id="addText">add text</button>
+    <button onclick="addInteractable('audio')" id="addAudio">add audio</button>
     <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
-    <button onClick="showMedia()">test media</button>
     <div id="shapeEditor" style="display: none;">
       <label for="nearScale">near scale</label>
       <input type="number" id="nearScale" onchange="nearScaleChanged(this);"></input>
       <label for="farScale">far scale</label>
       <input type="number" id="farScale" onchange="farScaleChanged(this);"></input>
       <label for="shapeType">type</label>
-      <select id="shapeType" onchange="shapeTypeChanged(this)">
+      <select id="shapeType" onchange="shapeTypeChanged(this);">
         <option value="floor">floor</option>
         <option value="mask">mask</option>
         <option value="block">block</option>
         <option value="warp">warp</option>
       </select>
+      <div style="display: none;" id="warpExtras">
+        <label>warp options</label>
+        <select id="warpType" onchange="warpTypeChanged(this);">
+          <option value="local">local</option>
+          <option value="remote">remote</option>
+        </select>
+        <button style="display: none;" id="chooseWarpExit" onclick="chooseWarpExit();">choose warp exit</button>
+        <input style="display: none;" id="remoteWarpID" type="text" placeholder="remote warp id"/>
+      </div>
       <button disabled=true id="saveScales" onclick="saveScales()">save</button>
       <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
     </div>
