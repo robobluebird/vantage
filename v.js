@@ -52,6 +52,7 @@ let idealInteractablePlacingSize;
 let interactableBox;
 let showingInteractables = false;
 let choosingLocalWarpPoint = false;
+let potentialLocalWarpPoint;
 
 function showMediaWithElement(element) {
     let old = document.querySelector('#mediaBox');
@@ -153,6 +154,7 @@ function resetForms() {
         placingInteractable = null;
         configuringInteractable = null;
         choosingLocalWarpPoint = false;
+        potentialLocalWarpPoint = null;
         makeShapes();
         return true;
     } else {
@@ -184,6 +186,25 @@ function saveScales() {
             }
         }
 
+        if (potentialLocalWarpPoint) {
+            let warpTo = shapes.filter(function(shape) { return shape.id == potentialLocalWarpPoint })[0];
+
+            if (warpTo) {
+                currentEditingShape.warpData = {
+                    type: 'local',
+                    id: warpTo.id
+                };
+
+                warpTo.warpData = {
+                    type: 'local',
+                    id: currentEditingShape.id
+                };
+            }
+
+            potentialLocalWarpPoint = null;
+            choosingLocalWarpPoint = false;
+        }
+
         document.querySelector('#saveScales').disabled = true;
         draw();
     }
@@ -194,6 +215,12 @@ function deleteShape() {
         let index = shapes.findIndex(function (shape) { return shape.id == currentEditingShape.id; });
 
         if (index > -1) {
+            if (shapes[index].type == 'warp' && shapes[index].warpData) {
+                let warpTo = shapes.filter(function(shape) { return shape.id == shapes[index].warpData.id })[0];
+
+                if (warpTo) warpTo.warpData = null;
+            }
+
             shapes.splice(index, 1);
         }
 
@@ -308,6 +335,7 @@ function finishPlacingInteractable() {
     placingInteractable = null;
     configuringInteractable = null;
     choosingLocalWarpPoint = false;
+    potentialLocalWarpPoint = null;
     canvas.onmousemove = null;
 
     clearEditValues();
@@ -340,18 +368,10 @@ canvas.onclick = function (e) {
 
         if (foundWarps.length > 0) {
             let foundWarp = foundWarps[0];
-
-            currentEditingShape.warpData = {
-                type: 'local',
-                id: foundWarp.id
-            };
-
-            foundWarp.warpData = {
-                type: 'local',
-                id: currentEditingShape.id
-            };
-
-            choosingLocalWarpPoint = false;
+            potentialLocalWarpPoint = foundWarp.id;
+            document.querySelector('#saveScales').disabled = false;
+        } else {
+            potentialLocalWarpPoint = null;
         }
     } else if (placingInteractable) {
         if (placingInteractable == 'link') {
@@ -445,6 +465,8 @@ canvas.onclick = function (e) {
                 currentEditingShape = clickedShapes[0];
             }
         }
+
+        document.querySelector('#warpExtras').style.display = 'none';
     } else if (placingCharacter) {
         shapes.every(function (shape) {
             if (adaptedPointIsInPolygon({ x: e.clientX, y: e.clientY }, shape.points)) {
@@ -560,6 +582,7 @@ function addInteractable(type) {
     placingInteractable = type;
     configuringInteractable = null;
     choosingLocalWarpPoint = false;
+    potentialLocalWarpPoint = null;
 
     clearEditValues();
     resetForms();
@@ -585,9 +608,6 @@ function addInteractable(type) {
     draw();
 }
 
-function addLink() {
-}
-
 function makeShapes() {
     placingCharacter = false;
     makingShapes = true;
@@ -595,6 +615,7 @@ function makeShapes() {
     placingInteractable = null;
     configuringInteractable = null;
     choosingLocalWarpPoint = false;
+    potentialLocalWarpPoint = null;
 
     clearEditValues();
     resetForms();
@@ -623,6 +644,7 @@ function placeCharacter() {
     placingInteractable = null;
     configuringInteractable = null;
     choosingLocalWarpPoint = false;
+    potentialLocalWarpPoint = null;
 
     clearEditValues();
     resetForms();
@@ -653,6 +675,7 @@ function editShapes() {
     placingInteractable = null;
     configuringInteractable = null;
     choosingLocalWarpPoint = false;
+    potentialLocalWarpPoint = null;
 
     clearEditValues();
     resetForms();
@@ -683,13 +706,11 @@ function toggleGuides() {
     resetForms();
 
     if (showGuides) {
-        document.getElementById("addLink").style.display = "none";
         document.getElementById("placeCharacter").style.display = "none";
         document.getElementById("makeShapes").style.display = "none";
         document.getElementById("editShapes").style.display = "none";
         document.getElementById("shapeEditor").style.display = "none";
         document.getElementById("clearPoints").style.display = "none";
-        document.getElementById("addWarp").style.display = "none";
         document.getElementById("addLink").style.display = "none";
         document.getElementById("addText").style.display = "none";
         document.getElementById("addAudio").style.display = "none";
@@ -697,13 +718,11 @@ function toggleGuides() {
         showGuides = false;
         draw();
     } else {
-        document.getElementById("addLink").style.display = "block";
         document.getElementById("placeCharacter").style.display = "block";
         document.getElementById("makeShapes").style.display = "block";
         document.getElementById("editShapes").style.display = "block";
         document.getElementById("clearPoints").style.display = "block";
         document.getElementById("shapeEditor").style.display = "none";
-        document.getElementById("addWarp").style.display = "block";
         document.getElementById("addLink").style.display = "block";
         document.getElementById("addText").style.display = "block";
         document.getElementById("addAudio").style.display = "block";
@@ -787,6 +806,15 @@ function draw() {
 
             if (shapes[n].type == 'warp' && shapes[n].warpData && shapes[n].warpData.type == 'local' && shapes[n].warpData.id) {
                 let warpTo = shapes.filter(function(shape) { return shape.id == shapes[n].warpData.id })[0];
+
+                if (warpTo) {
+                    ctx.beginPath();
+                    ctx.moveTo(shapes[n].points[0].xp * scaledImageWidth(), shapes[n].points[0].yp * scaledImageHeight());
+                    ctx.lineTo(warpTo.points[0].xp * scaledImageWidth(), warpTo.points[0].yp * scaledImageHeight());
+                    ctx.stroke();
+                }
+            } else if (editingShapes && currentEditingShape && currentEditingShape.id == shapes[n].id && potentialLocalWarpPoint) {
+                let warpTo = shapes.filter(function(shape) { return shape.id == potentialLocalWarpPoint })[0];
 
                 if (warpTo) {
                     ctx.beginPath();
