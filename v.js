@@ -179,6 +179,8 @@ function saveScales() {
             }
 
             if (shapeTypeSelectValue != 'warp') {
+                let warpTo = shapes.filter(function(shape) { return shape.id == currentEditingShape.warpData.id; })[0];
+                warpTo.warpData = null;
                 currentEditingShape.warpData = null;
                 document.querySelector('#warpExtras').style.display = 'none';
             } else {
@@ -235,6 +237,7 @@ function clearEditValues() {
     document.querySelector("#farScale").value = null;
     document.querySelector("#shapeType").selectedIndex = -1;
     document.querySelector("#warpType").selectedIndex = -1;
+    document.querySelector("#remoteWarpID").value = null;
     document.querySelector('#saveScales').disabled = true;
     document.querySelector('#deleteShape').disabled = true;
 }
@@ -435,11 +438,8 @@ canvas.onclick = function (e) {
         let clickedShapes = shapes.filter(function (shape) { return adaptedPointIsInPolygon({ x: e.clientX, y: e.clientY }, shape.points); });
 
         if (clickedShapes.length == 1) {
-            document.querySelector("#nearScale").value = clickedShapes[0].nearScale;
-            document.querySelector("#farScale").value = clickedShapes[0].farScale;
-            document.querySelector("#shapeType").value = clickedShapes[0].type;
-            document.querySelector("#deleteShape").disabled = false;
             currentEditingShape = clickedShapes[0];
+            setEditDetails();
         } else if (clickedShapes.length > 1) {
             if (currentEditingShape) {
                 let index = clickedShapes.findIndex(function (shape) {
@@ -452,21 +452,13 @@ canvas.onclick = function (e) {
 
                 if (index >= clickedShapes.length) index = 0;
 
-                document.querySelector("#nearScale").value = clickedShapes[index].nearScale;
-                document.querySelector("#farScale").value = clickedShapes[index].farScale;
-                document.querySelector("#shapeType").value = clickedShapes[index].type;
-                document.querySelector("#deleteShape").disabled = false;
                 currentEditingShape = clickedShapes[index];
+                setEditDetails();
             } else {
-                document.querySelector("#nearScale").value = clickedShapes[0].nearScale;
-                document.querySelector("#farScale").value = clickedShapes[0].farScale;
-                document.querySelector("#shapeType").value = clickedShapes[0].type;
-                document.querySelector("#deleteShape").disabled = false;
                 currentEditingShape = clickedShapes[0];
+                setEditDetails();
             }
         }
-
-        document.querySelector('#warpExtras').style.display = 'none';
     } else if (placingCharacter) {
         shapes.every(function (shape) {
             if (adaptedPointIsInPolygon({ x: e.clientX, y: e.clientY }, shape.points)) {
@@ -502,7 +494,8 @@ canvas.onclick = function (e) {
                     height: height,
                     shape: shape,
                     flip: false,
-                    frame: 0
+                    frame: 0,
+                    warpedTo: null
                 })
 
                 idealPlacingWidth = null;
@@ -560,6 +553,27 @@ canvas.onclick = function (e) {
     }
 
     draw();
+}
+
+function setEditDetails() {
+    document.querySelector("#nearScale").value = currentEditingShape.nearScale;
+    document.querySelector("#farScale").value = currentEditingShape.farScale;
+    document.querySelector("#shapeType").value = currentEditingShape.type;
+    document.querySelector("#deleteShape").disabled = false;
+
+    if (currentEditingShape.type == 'warp') {
+        document.querySelector('#warpExtras').style.display = 'block';
+
+        if (currentEditingShape.warpData) {
+            document.querySelector('#warpType').value = currentEditingShape.warpData.type;
+
+            if (currentEditingShape.warpData.type == 'remote') {
+                document.querySelector('#remoteWarpID').value = currentEditingShape.warpData.id;
+            }
+        }
+    } else {
+        document.querySelector('#warpExtras').style.display = 'none';
+    }
 }
 
 function scaledImageWidth() {
@@ -780,6 +794,8 @@ function draw() {
                 } else {
                     if (choosingLocalWarpPoint && shapes[n].type == 'warp') {
                         ctx.fillStyle = "rgba(255, 0, 255, 1.0)";
+                    } else if (currentEditingShape.type == 'warp' && currentEditingShape.warpData && currentEditingShape.warpData.id == shapes[n].id) {
+                        ctx.fillStyle = "rgba(0, 255, 255, 1.0)";
                     } else {
                         ctx.fillStyle = "rgba(220, 220, 220, 0.5)";
                     }
@@ -1309,12 +1325,16 @@ const t = setInterval(function () {
             }
         });
 
-        let foundWarp, xShape, yShape;
+        let foundWarpX, foundWarpY, xShape, yShape;
 
         if (xShapes['block']) {
             // do nothing right now
-        } else if (xShapes['warp']) {
-            foundWarp = xShapes['warp'];
+        } else if (xShapes['warp'] && xShapes['warp'].warpData) {
+            if (characters[0].warpedTo && characters[0].warpedTo.id == xShapes['warp'].id) {
+                characters[0].xp = newXP;
+            } else {
+                foundWarpX = xShapes['warp'];
+            }
         } else if (xShapes['floor']) {
             characters[0].xp = newXP;
             xShape = xShapes['floor'];
@@ -1322,20 +1342,37 @@ const t = setInterval(function () {
 
         if (yShapes['block']) {
             // do nothing right now
-        } else if (yShapes['warp']) {
-            foundWarp = yShapes['warp'];
+        } else if (yShapes['warp'] && yShapes['warp'].warpData) {
+            if (characters[0].warpedTo && characters[0].warpedTo.id == yShapes['warp'].id) {
+                characters[0].yp = newYP;
+            } else {
+                foundWarpY = yShapes['warp'];
+            }
         } else if (yShapes['floor']) {
             characters[0].yp = newYP;
             yShape = yShapes['floor'];
         }
 
-        if (foundWarp) {
-            // do a warp
+        if (foundWarpX && foundWarpX.warpData) {
+            let warpTo = shapes.filter(function(shape) { return shape.id == foundWarpX.warpData.id })[0];
+
+            characters[0].warpedTo = warpTo;
+            characters[0].shape = warpTo;
+            characters[0].xp = warpTo.points[0].xp;
+            characters[0].yp = warpTo.points[0].yp;
+        } else if (foundWarpY && foundWarpY.warpData) {
+            let warpTo = shapes.filter(function(shape) { return shape.id == foundWarpY.warpData.id })[0];
+
+            characters[0].warpedTo = warpTo;
+            characters[0].shape = warpTo;
+            characters[0].xp = warpTo.points[0].xp;
+            characters[0].yp = warpTo.points[0].yp;
         } else if (xShape &&
                    yShape &&
                    xShape.id == yShape.id &&
                    xShape.id != characters[0].shape.id) {
             characters[0].shape = xShape;
+            characters[0].warpedTo = null;
         }
     } else {
         characters[0].frame = 0;
