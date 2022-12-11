@@ -287,7 +287,7 @@ post '/scenes/:scene_id/shapes/:shape_id' do
         warp_to = scene.shapes.find warp_type_and_id.last
         warp_to_data = Warp.new
         warp_to_data.warp_type = 'local'
-        warp_to_data.warp_id = shape.id
+        warp_to_data.warp_id = shape.id.to_s
         warp_to.warp = warp_to_data
         warp_to.save!
 

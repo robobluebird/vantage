@@ -184,7 +184,6 @@ function saveScales() {
     paramsData = paramsData.concat(`&far_scale=${currentEditingShape.farScale}`);
     paramsData = paramsData.concat(`&shape_type=${currentEditingShape.type}`);
 
-
     if (shapeTypeSelectValue == 'floor') {
       currentEditingShape.tiles = null;
     } else if (shapeTypeSelectValue == 'mask') {
@@ -204,6 +203,7 @@ function saveScales() {
         warpTo.warpData = null;
       }
 
+      document.querySelector("#warpType").selectedIndex = -1;
       document.querySelector('#warpExtras').style.display = 'none';
     } else {
       document.querySelector('#warpExtras').style.display = 'block';
@@ -234,10 +234,14 @@ function saveScales() {
       choosingLocalWarpPoint = false;
     }
 
-    console.log(paramsData);
+    postRequest(`/scenes/${SCENE_ID}/shapes/${currentEditingShape.id}`, paramsData, function(data, error) {
+      if (error) {
+        console.log('we have error');
+      } else {
+        console.log(data);
+      }
 
-    postRequest(`/scenes/${SCENE_ID}/shapes/${currentEditingShape.id}`, paramsData, function(data) {
-      console.log(data);
+      draw();
     });
 
     document.querySelector('#saveScales').disabled = true;
@@ -1250,8 +1254,6 @@ window.onload = function () {
           warpData: shape.warp ? {id: shape.warp.warp_id, type: shape.warp.warp_type} : null
         };
       });
-
-      console.log(shapes);
     }
 
     backgroundImage.src = `/scenes/${SCENE_ID}/image`;
