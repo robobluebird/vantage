@@ -46,14 +46,18 @@
     }
   </style>
 
-  <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="mask-icon" href="favicon.ico" color="#000000">
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="mask-icon" href="/favicon.ico" color="#000000">
+
+  <script type="text/javascript">
+    const SCENE_ID = "<%= @scene.id %>";
+  </script>
 </head>
 <body>
   <div id="messages"></div>
   <div id="controls">
-    <button onclick="placeCharacter()" id="placeCharacter" disabled=true>place character</button>
+    <button onclick="placeStartingPoint()" id="placeStartingPoint" disabled=true>place starting point</button>
     <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
     <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
     <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
@@ -104,8 +108,6 @@
   </form>
   <canvas id="canvas" style="z-index: 0; position: relative; background-color:blue;">
   </canvas>
-  <script type="text/javascript">
-  </script>
 </body>
-<script src="v.js"></script>
+<script src="/v.js"></script>
 </html>

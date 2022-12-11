@@ -1,0 +1,28 @@
+<ul>
+  <% @scenes.each do |scene| %>
+    <li>
+      <div>
+        <a href="/scenes/<%= scene.id %>"><%= scene.id %></a>
+      </div>
+      <div>
+        <p>start_xp: <%= scene.start_xp %>, start_yp: <%= scene.start_yp %></p>
+      </div>
+      <div>
+      <% scene.shapes.each do |shape| %>
+        <div>
+          <div>
+            <p>shape type: <%= shape.shape_type %></p>
+            <p>points:</p>
+            <p>
+              <% shape.points.each do |point| %>
+                <p>xp: <%= point[:xp] %>, yp: <%= point[:yp] %></p>
+              <% end %>
+            </p>
+          </div>
+        </div>
+      <% end %>
+    </li>
+  <% end %>
+</ul>
+
+<a href="/scenes/new">new scene</a>

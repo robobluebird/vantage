@@ -1,0 +1,13 @@
+<html>
+  <body>
+    <ul>
+      <% @interactable_templates.each do |it| %>
+        <li>
+          <p><%= it.interactable_type %></p>
+          <img style="width: 50px; height: 50px;" src="/interactable_templates/<%= it.interactable_type %>/image"></img>
+        </li>
+      <% end %>
+    </ul>
+    <a href="/interactable_templates/new">new interactable template</a>
+  </body>
+</html>
