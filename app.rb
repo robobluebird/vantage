@@ -25,22 +25,21 @@ class Scene
   field :start_yp, type: Float
 
   embeds_many :shapes
+  embeds_many :interactables
 
-  has_many :interactables
   has_many :characters
 end
 
 class Interactable
   include Mongoid::Document
 
-  field :type
+  field :interactable_type
   field :xp, type: Float
   field :yp, type: Float
-  field :size, type: Integer
+  field :size, type: Float
   field :data, type: Hash
 
-  belongs_to :interactable_template
-  belongs_to :scene
+  embedded_in :scene
 end
 
 class InteractableTemplate
@@ -250,13 +249,45 @@ post '/scenes/:scene_id/shapes' do
   s.points = pts
   s.scene = Scene.find params[:scene_id]
 
-  puts s.inspect
-
   if s.save!
     s.to_json
   else
       {error: 'wut'}.to_json
   end
+end
+
+post '/scenes/:scene_id/interactables' do
+  scene = Scene.find params[:scene_id]
+  i = Interactable.new
+
+  i.scene = Scene.find params[:scene_id]
+  
+  interactable_template = InteractableTemplate.find_by interactable_type: params[:interactable_type]
+
+  raise 'what the fuck' unless interactable_template
+
+  i.scene = scene
+  i.interactable_type = params[:interactable_type]
+  i.xp = params[:xp]
+  i.yp = params[:yp]
+  data = {}
+  params[:data].split('|').each do |pair_string|
+    pair = pair_string.split ':'
+    data[pair.first] = pair.last
+  end
+  i.data = data
+  i.size = params[:size]
+
+  i.save!
+
+  i.to_json
+end
+
+post '/scenes/:scene_id/interactables/:interactable_id/delete' do
+  scene = Scene.find params[:scene_id]
+  interactable = scene.interactables.find params[:interactable_id]
+  interactable.destroy
+  scene.to_json
 end
 
 post '/scenes/:scene_id/shapes/:shape_id' do
@@ -269,7 +300,7 @@ post '/scenes/:scene_id/shapes/:shape_id' do
 
   if params[:warp]
     if params[:warp] == "null"
-      if shape.warp.warp_type == 'local'
+      if shape.warp && shape.warp.warp_type == 'local'
         warp_to = scene.shapes.find shape.warp.warp_id
         warp_to.warp = nil
         warp_to.save!
@@ -306,6 +337,10 @@ post '/scenes/:scene_id/shapes/:shape_id' do
 end
 
 post '/scenes/:scene_id/shapes/:shape_id/delete' do
+  scene = Scene.find params[:scene_id]
+  shape = scene.shapes.find params[:shape_id]
+  shape.destroy
+  scene.to_json
 end
 
 post '/characters' do

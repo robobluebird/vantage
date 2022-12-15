@@ -3,7 +3,6 @@ let mediaType = 0;
 const canvas = document.getElementById("canvas");
 const points = [];
 const characters = [];
-const interactables = []; // LINKS, IMAGES, TEXT, VIDEO
 const interactableTemplates = [
   {
     name: 'link',
@@ -15,6 +14,10 @@ const interactableTemplates = [
   },
   {
     name: 'audio',
+    image: new Image()
+  },
+  {
+    name: 'download',
     image: new Image()
   },
   {
@@ -40,6 +43,7 @@ const backgroundImage = new Image();
 const backgroundWidth = 0;
 const backgroundHeight = 0;
 
+let interactables = []; // LINKS, IMAGES, TEXT, VIDEO
 let shapes = [];
 let startingPoint = null;
 let displayingMessages = false;
@@ -47,6 +51,7 @@ let showGuides = true;
 let scale = 1.0;
 let mouseX = 0;
 let mouseY = 0;
+let deletingInteractables = false;
 let placingStartingPoint = false;
 let placingInteractable;
 let configuringInteractable;
@@ -113,16 +118,8 @@ function showMediaWithData(data) {
 
   let e;
   switch (data.type) {
-    case 'upload':
-      e = document.querySelector('#uploadForm').cloneNode(true);
-      let form = e.querySelector('form');
-      form.onsubmit = function (e) {
-        e.preventDefault();
-        // do something if you want.
-        return false;
-      };
-      e.style.display = 'block';
-      e.style.position = 'relative';
+    case 'download':
+      console.log('how send file tho?');
       break;
     case 'audio':
       e = document.createElement('audio');
@@ -234,11 +231,11 @@ function saveScales() {
       choosingLocalWarpPoint = false;
     }
 
-    postRequest(`/scenes/${SCENE_ID}/shapes/${currentEditingShape.id}`, paramsData, function(data, error) {
-      if (error) {
-        console.log('we have error');
+    postRequest(`/scenes/${SCENE_ID}/shapes/${currentEditingShape.id}`, paramsData, function(result) {
+      if (result.error) {
+        console.log('we have error: ' + result.error);
       } else {
-        console.log(data);
+        console.log(result);
       }
 
       draw();
@@ -260,11 +257,16 @@ function deleteShape() {
         if (warpTo) warpTo.warpData = null;
       }
 
-      shapes.splice(index, 1);
+      postRequest(`/scenes/${SCENE_ID}/shapes/${currentEditingShape.id}/delete`, null, function(result) {
+        if (result.error) {
+          console.log('there has been an error: ' + result.error);
+        } else {
+          shapes.splice(index, 1);
+          clearEditValues();
+          makeShapes();
+        }
+      });
     }
-
-    clearEditValues();
-    makeShapes();
   }
 }
 
@@ -359,16 +361,48 @@ function finishPlacingInteractable() {
       form = document.querySelector('.audioForm:not(.proto)');
       data.file = form.querySelector('input[type=file]').files[0];
       break;
+    case 'download':
+      form = document.querySelector('.downloadForm:not(.proto)');
+      data.file = form.querySelector('input[type=file]').files[0];
+      break;
   }
 
-  interactables.push({
-    objectType: 'interactable',
-    id: generateUUID(),
-    type: configuringInteractable.type,
-    data: data,
-    xp: configuringInteractable.x / scaledImageWidth(),
-    yp: configuringInteractable.y / scaledImageHeight(),
-    size: idealInteractablePlacingSize,
+  let postData = '';
+  postData = postData.concat(`interactable_type=${configuringInteractable.type}`)
+  postData = postData.concat(`&xp=${configuringInteractable.x / scaledImageWidth()}`);
+  postData = postData.concat(`&yp=${configuringInteractable.y / scaledImageHeight()}`);
+  postData = postData.concat(`&size=${idealInteractablePlacingSize}`);
+
+  // DO A THING that allows the file data to come through...data and type
+
+  let pData = '';
+  for (const [key, value] of Object.entries(data)) {
+    console.log(`${key}: ${value}`);
+    pData = pData.concat(`${key}:${value}|`);
+  }
+
+  pData = pData.slice(0, -1);
+
+  postData = postData.concat(`&data=${pData}`);
+
+  postRequest(`/scenes/${SCENE_ID}/interactables`, postData, function(result) {
+    if (result.error) {
+      console.log('we have error: ' + result.error);
+    } else {
+      console.log(result);
+
+      interactables.push({
+        objectType: 'interactable',
+        id: result._id.$oid,
+        type: result.interactable_type,
+        data: result.data,
+        xp: result.xp,
+        yp: result.yp,
+        size: idealInteractablePlacingSize,
+      });
+
+      console.log(interactables);
+    }
   });
 
   makeShapes();
@@ -391,7 +425,31 @@ function generateUUID() { // Public Domain/MIT
 }
 
 canvas.onclick = function (e) {
-  if (choosingLocalWarpPoint && currentEditingShape && currentEditingShape.type == 'warp') {
+  if (deletingInteractables) {
+    let foundInteractableIndex = interactables.findIndex(function(interactable) {
+      let iX = interactable.xp * scaledImageWidth();
+      let iY = interactable.yp * scaledImageHeight();
+      let distance = Math.sqrt(Math.pow(e.clientX - iX, 2) + Math.pow(e.clientY - iY, 2));
+
+      if (distance < interactable.size) {
+        return true;
+      } else {
+        return false;
+      }
+    });
+
+    if (foundInteractableIndex != -1) {
+      postRequest(`/scenes/${SCENE_ID}/interactables/${interactables[foundInteractableIndex].id}/delete`, null, function(result) {
+        if (result.error) {
+          console.log('oh no error: ' + result.error);
+        } else {
+          interactables.splice(foundInteractableIndex, 1);
+        }
+
+        draw();
+      });
+    }
+  } else if (choosingLocalWarpPoint && currentEditingShape && currentEditingShape.type == 'warp') {
     let foundWarps = shapes.filter(function (shape) {
       return adaptedPointIsInPolygon({ x: e.clientX, y: e.clientY }, shape.points) &&
         shape.type == 'warp' &&
@@ -406,42 +464,24 @@ canvas.onclick = function (e) {
       potentialLocalWarpPoint = null;
     }
   } else if (placingInteractable) {
+    let form;
+
     if (placingInteractable == 'link') {
-      let form = document.querySelector('.linkForm').cloneNode(true);
+      form = document.querySelector('.linkForm').cloneNode(true);
       form.classList.remove('proto');
       form.style.display = 'block';
       form.style.position = 'relative';
       form.querySelector('button.go').onclick = finishPlacingInteractable;
       form.querySelector('button.cancel').onclick = makeShapes;
-
-      showMediaWithElement(form);
-
-      configuringInteractable = {
-        type: placingInteractable,
-        x: e.clientX,
-        y: e.clientY
-      };
-
-      placingInteractable = null;
     } else if (placingInteractable == 'text') {
-      let form = document.querySelector('.textForm').cloneNode(true);
+      form = document.querySelector('.textForm').cloneNode(true);
       form.classList.remove('proto');
       form.style.display = 'block';
       form.style.position = 'relative';
       form.querySelector('button.go').onclick = finishPlacingInteractable;
       form.querySelector('button.cancel').onclick = makeShapes;
-
-      showMediaWithElement(form);
-
-      configuringInteractable = {
-        type: placingInteractable,
-        x: e.clientX,
-        y: e.clientY
-      };
-
-      placingInteractable = null;
     } else if (placingInteractable == 'audio') {
-      let form = document.querySelector('.audioForm').cloneNode(true);
+      form = document.querySelector('.audioForm').cloneNode(true);
       form.classList.remove('proto');
       form.style.display = 'block';
       form.style.position = 'relative';
@@ -452,17 +492,29 @@ canvas.onclick = function (e) {
         return false;
       };
       form.querySelector('button.cancel').onclick = makeShapes;
-
-      showMediaWithElement(form);
-
-      configuringInteractable = {
-        type: placingInteractable,
-        x: e.clientX,
-        y: e.clientY
+    } else if (placingInteractable == 'download') {
+      form = document.querySelector('.downloadForm').cloneNode(true);
+      form.classList.remove('proto');
+      form.style.display = 'block';
+      form.style.position = 'relative';
+      form.style.backgroundColor = 'white';
+      form.onsubmit = function (e) {
+        e.preventDefault();
+        finishPlacingInteractable();
+        return false;
       };
-
-      placingInteractable = null;
+      form.querySelector('button.cancel').onclick = makeShapes;
     }
+
+    showMediaWithElement(form);
+
+    configuringInteractable = {
+      type: placingInteractable,
+      x: e.clientX,
+      y: e.clientY
+    };
+
+    placingInteractable = null;
   } else if (editingShapes) {
     let clickedShapes = shapes.filter(function (shape) { return adaptedPointIsInPolygon({ x: e.clientX, y: e.clientY }, shape.points); });
 
@@ -503,9 +555,9 @@ canvas.onclick = function (e) {
 
         let formData = `start_xp=${newXP}&start_yp=${newYP}`;
 
-        postRequest(`/scenes/${SCENE_ID}`, formData, function(_, error) {
-          if (error) {
-            console.log('we had error');
+        postRequest(`/scenes/${SCENE_ID}`, formData, function(result) {
+          if (result.error) {
+            console.log('we had error: ' + result.error);
             startingPoint = {...oldStartingPoint};
           }
 
@@ -570,12 +622,12 @@ canvas.onclick = function (e) {
 
         let paramsData = `points=${urlPoints}&near_scale=${1.0}&far_scale=${0.5}&min_yp=${minYP}&max_yp=${maxYP}&shape_type=floor`;
 
-        postRequest(`/scenes/${SCENE_ID}/shapes`, paramsData, function(data, error) {
-          if (error) {
-            console.log('we had error');
+        postRequest(`/scenes/${SCENE_ID}/shapes`, paramsData, function(result) {
+          if (result.error) {
+            console.log('we had error: ' + result.error);
           }
 
-          shape.id = data._id.$oid;
+          shape.id = result._id.$oid;
 
           draw();
         });
@@ -628,6 +680,28 @@ function capitalize(word) {
   return word.charAt(0).toUpperCase() + lower.slice(1);
 }
 
+function deleteInteractables() {
+  placingStartingPoint = false;
+  makingShapes = false;
+  editingShapes = false;
+  placingInteractable = null;
+  configuringInteractable = null;
+  choosingLocalWarpPoint = false;
+  potentialLocalWarpPoint = null;
+  deletingInteractables = true;
+
+  clearEditValues();
+  resetForms();
+
+  document.getElementById("placeStartingPoint").disabled = false;
+  document.getElementById("makeShapes").disabled = false;
+  document.getElementById("addLink").disabled = false;
+  document.getElementById("addText").disabled = false;
+  document.getElementById("addAudio").disabled = false;
+  document.getElementById("addDownload").disabled = false;
+  document.getElementById("deleteInteractables").disabled = true;
+}
+
 function addInteractable(type) {
   placingStartingPoint = false;
   makingShapes = false;
@@ -636,6 +710,7 @@ function addInteractable(type) {
   configuringInteractable = null;
   choosingLocalWarpPoint = false;
   potentialLocalWarpPoint = null;
+  deletingInteractables = false;
 
   clearEditValues();
   resetForms();
@@ -669,6 +744,7 @@ function makeShapes() {
   configuringInteractable = null;
   choosingLocalWarpPoint = false;
   potentialLocalWarpPoint = null;
+  deletingInteractables = false;
 
   canvas.onmousemove = null;
 
@@ -678,8 +754,10 @@ function makeShapes() {
   document.getElementById("placeStartingPoint").disabled = false;
   document.getElementById("makeShapes").disabled = true;
   document.getElementById("addLink").disabled = false;
+  document.getElementById("deleteInteractables").disabled = false;
   document.getElementById("addText").disabled = false;
   document.getElementById("addAudio").disabled = false;
+  document.getElementById("addDownload").disabled = false;
 
   if (shapes.length > 0) {
     document.getElementById("editShapes").disabled = false;
@@ -702,6 +780,7 @@ function placeStartingPoint() {
   configuringInteractable = null;
   choosingLocalWarpPoint = false;
   potentialLocalWarpPoint = null;
+  deletingInteractables = false;
 
   clearEditValues();
   resetForms();
@@ -709,8 +788,10 @@ function placeStartingPoint() {
   document.getElementById("placeStartingPoint").disabled = true;
   document.getElementById("makeShapes").disabled = false;
   document.getElementById("addLink").disabled = false;
+  document.getElementById("deleteInteractables").disabled = false;
   document.getElementById("addText").disabled = false;
   document.getElementById("addAudio").disabled = false;
+  document.getElementById("addDownload").disabled = false;
 
   if (shapes.length > 0) {
     document.getElementById("editShapes").disabled = false;
@@ -735,6 +816,7 @@ function editShapes() {
   configuringInteractable = null;
   choosingLocalWarpPoint = false;
   potentialLocalWarpPoint = null;
+  deletingInteractables = false;
 
   clearEditValues();
   resetForms();
@@ -742,8 +824,10 @@ function editShapes() {
   document.getElementById("placeStartingPoint").disabled = false;
   document.getElementById("makeShapes").disabled = false;
   document.getElementById("addLink").disabled = false;
+  document.getElementById("deleteInteractables").disabled = false;
   document.getElementById("addText").disabled = false;
   document.getElementById("addAudio").disabled = false;
+  document.getElementById("addDownload").disabled = false;
   document.getElementById("editShapes").disabled = true;
   document.getElementById("shapeEditor").style.display = "block";
 
@@ -773,8 +857,10 @@ function toggleGuides() {
     document.getElementById("shapeEditor").style.display = "none";
     document.getElementById("clearPoints").style.display = "none";
     document.getElementById("addLink").style.display = "none";
+    document.getElementById("deleteInteractables").style.display = "none";
     document.getElementById("addText").style.display = "none";
     document.getElementById("addAudio").style.display = "none";
+    document.getElementById("addDownload").style.display = "none";
     document.getElementById("toggleGuides").innerText = "show guides";
     showGuides = false;
     draw();
@@ -785,8 +871,10 @@ function toggleGuides() {
     document.getElementById("clearPoints").style.display = "block";
     document.getElementById("shapeEditor").style.display = "none";
     document.getElementById("addLink").style.display = "block";
+    document.getElementById("deleteInteractables").style.display = "block";
     document.getElementById("addText").style.display = "block";
     document.getElementById("addAudio").style.display = "block";
+    document.getElementById("addDownload").style.display = "block";
     document.getElementById("toggleGuides").innerText = "hide guides";
     showGuides = true;
     makeShapes();
@@ -1208,7 +1296,7 @@ window.onresize = function () {
   idealPlacingHeight = null;
   idealInteractablePlacingSize = null;
 
-  shapes.filter(function (shape) { return shape.tiles; }).forEach(function (shape) {
+  shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
     shape.tiles = tileMask(shape);
   });
 
@@ -1220,6 +1308,57 @@ window.onload = function () {
     calculateImageSize();
     resize();
     draw();
+
+    getRequest(`/scenes/${SCENE_ID}/json`, function(data) {
+      let scene = data;
+
+      console.log(scene);
+
+      if (scene.start_xp) {
+        startingPoint = {
+          xp: scene.start_xp,
+          yp: scene.start_yp
+        };
+      }
+
+      if (scene.shapes) {
+        shapes = scene.shapes.map(function(shape) {
+          return {
+            id: shape._id.$oid,
+            objectType: 'shape',
+            nearScale: shape.near_scale,
+            farScale: shape.far_scale,
+            minYP: shape.min_yp,
+            maxYP: shape.max_yp,
+            type: shape.shape_type,
+            points: shape.points.map(function(point) { return {xp: parseFloat(point.xp), yp: parseFloat(point.yp)}; }),
+            warpData: shape.warp ? {id: shape.warp.warp_id, type: shape.warp.warp_type} : null
+          };
+        });
+
+        console.log(shapes);
+
+        shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
+          shape.tiles = tileMask(shape);
+        });
+      }
+
+      if (scene.interactables) {
+        interactables = scene.interactables.map(function(interactable) {
+          return {
+            objectType: 'interactable',
+            id: interactable._id.$oid,
+            type: interactable.interactable_type,
+            data: interactable.data,
+            xp: interactable.xp,
+            yp: interactable.yp,
+            size: interactable.size
+          }
+        });
+      }
+
+      makeShapes();
+    });
   };
 
   /**
@@ -1228,41 +1367,10 @@ window.onload = function () {
   imgs[2].src = "mario2.png";
   */
 
-  getRequest(`/scenes/${SCENE_ID}/json`, function(data) {
-    let scene = data;
+  backgroundImage.src = `/scenes/${SCENE_ID}/image`;
 
-    console.log(scene);
-
-    if (scene.start_xp) {
-      startingPoint = {
-        xp: scene.start_xp,
-        yp: scene.start_yp
-      };
-    }
-
-    if (scene.shapes) {
-      shapes = scene.shapes.map(function(shape) {
-        return {
-          id: shape._id.$oid,
-          objectType: 'shape',
-          nearScale: shape.near_scale,
-          farScale: shape.far_scale,
-          minYP: shape.min_yp,
-          maxYP: shape.max_yp,
-          type: shape.shape_type,
-          points: shape.points.map(function(point) { return {xp: point.xp, yp: point.yp}; }),
-          warpData: shape.warp ? {id: shape.warp.warp_id, type: shape.warp.warp_type} : null
-        };
-      });
-    }
-
-    backgroundImage.src = `/scenes/${SCENE_ID}/image`;
-
-    interactableTemplates.forEach(function (t) {
-      t.image.src = `/interactable_templates/${t.name}/image`;
-    });
-
-    makeShapes();
+  interactableTemplates.forEach(function (t) {
+    t.image.src = `/interactable_templates/${t.name}/image`;
   });
 }
 
@@ -1506,7 +1614,12 @@ function postRequest(url, paramsData, callback) {
       callback(JSON.parse(this.response));
     }
   }
-  xhr.send(paramsData);
+
+  if (paramsData) {
+    xhr.send(paramsData);
+  } else {
+    xhr.send();
+  }
 }
 
 document.addEventListener("keydown", function (e) {

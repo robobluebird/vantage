@@ -26,6 +26,10 @@
       display: none;
     }
 
+    .downloadForm {
+      display: none;
+    }
+
     #shapeEditor {
       background-color: lightgrey;
     }
@@ -64,7 +68,10 @@
     <button onclick="addInteractable('link');" id="addLink">add link</button>
     <button onclick="addInteractable('text');" id="addText">add text</button>
     <button onclick="addInteractable('audio')" id="addAudio">add audio</button>
+    <button onclick="addInteractable('download')" id="addDownload">add download</button>
+    <button onclick="deleteInteractables()" id="deleteInteractables">delete interactables</button>
     <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
+    <button onclick="toggleInteractables()" id="toggleInteractables">hide interactables</button>
     <div id="shapeEditor" style="display: none;">
       <label for="nearScale">near scale</label>
       <input type="number" id="nearScale" onchange="nearScaleChanged(this);"></input>
@@ -103,6 +110,12 @@
   <form class="audioForm proto">
     <label>choose a file</label>
     <input type="file" accept="audio/*"/>
+    <input type="submit" value="go"/>
+    <button class="cancel">cancel</button>
+  </form>
+  <form class="downloadForm proto">
+    <label>choose a file</label>
+    <input type="file"/>
     <input type="submit" value="go"/>
     <button class="cancel">cancel</button>
   </form>
