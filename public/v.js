@@ -43,6 +43,7 @@ const backgroundImage = new Image();
 const backgroundWidth = 0;
 const backgroundHeight = 0;
 
+let showInteractables = true;
 let interactables = []; // LINKS, IMAGES, TEXT, VIDEO
 let shapes = [];
 let startingPoint = null;
@@ -571,7 +572,7 @@ canvas.onclick = function (e) {
       }
     });
   } else if (makingShapes) {
-    if (points.length > 0) {
+    if (points.length > 2) {
       let x = e.clientX;
       let y = e.clientY;
 
@@ -751,19 +752,23 @@ function makeShapes() {
   clearEditValues();
   resetForms();
 
-  document.getElementById("placeStartingPoint").disabled = false;
-  document.getElementById("makeShapes").disabled = true;
-  document.getElementById("addLink").disabled = false;
-  document.getElementById("deleteInteractables").disabled = false;
-  document.getElementById("addText").disabled = false;
-  document.getElementById("addAudio").disabled = false;
-  document.getElementById("addDownload").disabled = false;
+  if (CAN_EDIT) {
+    document.getElementById("placeStartingPoint").disabled = false;
+    document.getElementById("makeShapes").disabled = true;
+    document.getElementById("addLink").disabled = false;
+    document.getElementById("deleteInteractables").disabled = false;
+    document.getElementById("addText").disabled = false;
+    document.getElementById("addAudio").disabled = false;
+    document.getElementById("addDownload").disabled = false;
 
-  if (shapes.length > 0) {
-    document.getElementById("editShapes").disabled = false;
+    if (shapes.length > 0) {
+      document.getElementById("editShapes").disabled = false;
+    }
+
+    document.getElementById("shapeEditor").style.display = "none";
+  } else {
+    toggleGuides();
   }
-
-  document.getElementById("shapeEditor").style.display = "none";
 
   points.splice(0, points.length);
 
@@ -847,21 +852,73 @@ function clearPoints() {
   draw();
 }
 
+function toggleInteractables() {
+  showInteractables = !showInteractables;
+  document.getElementById("toggleInteractables").innerText = showInteractables ? "hide interactables" : "show interactables";
+  draw();
+}
+
+function joinScene() {
+  let width = idealPlacingWidth;
+  let height = idealPlacingHeight;
+
+  if (!width || !height) {
+      let imageScale = 0;
+      let idealSize;
+
+      if (backgroundImage.naturalWidth > backgroundImage.naturalHeight) {
+          idealSize = backgroundImage.naturalWidth * .1;
+      } else {
+          idealSize = backgroundImage.naturalHeight * .1;
+      }
+
+      if (imgs[0].naturalWidth > imgs[0].naturalHeight) {
+          imageScale = idealSize / imgs[0].naturalWidth;
+      } else {
+          imageScale = idealSize / imgs[0].naturalHeight;
+      }
+
+      width = imgs[0].naturalWidth * imageScale;
+      height = imgs[0].naturalHeight * imageScale;
+  }
+
+  characters.push({
+      objectType: 'character',
+      images: imgs,
+      xp: e.clientX / scaledImageWidth(),
+      yp: e.clientY / scaledImageHeight(),
+      width: width,
+      height: height,
+      shape: shape,
+      flip: false,
+      frame: 0,
+      warpedTo: null
+  })
+
+  idealPlacingWidth = null;
+  idealPlacingHeight = null;
+  canvas.onmousemove = null;
+
+  makeShapes();
+}
+
 function toggleGuides() {
   resetForms();
 
   if (showGuides) {
-    document.getElementById("placeStartingPoint").style.display = "none";
-    document.getElementById("makeShapes").style.display = "none";
-    document.getElementById("editShapes").style.display = "none";
-    document.getElementById("shapeEditor").style.display = "none";
-    document.getElementById("clearPoints").style.display = "none";
-    document.getElementById("addLink").style.display = "none";
-    document.getElementById("deleteInteractables").style.display = "none";
-    document.getElementById("addText").style.display = "none";
-    document.getElementById("addAudio").style.display = "none";
-    document.getElementById("addDownload").style.display = "none";
-    document.getElementById("toggleGuides").innerText = "show guides";
+    if (CAN_EDIT) {
+      document.getElementById("placeStartingPoint").style.display = "none";
+      document.getElementById("makeShapes").style.display = "none";
+      document.getElementById("editShapes").style.display = "none";
+      document.getElementById("shapeEditor").style.display = "none";
+      document.getElementById("clearPoints").style.display = "none";
+      document.getElementById("addLink").style.display = "none";
+      document.getElementById("deleteInteractables").style.display = "none";
+      document.getElementById("addText").style.display = "none";
+      document.getElementById("addAudio").style.display = "none";
+      document.getElementById("addDownload").style.display = "none";
+      document.getElementById("toggleGuides").innerText = "show guides";
+    }
     showGuides = false;
     draw();
   } else {
@@ -1029,7 +1086,7 @@ function draw() {
       drawable.elem.tiles.forEach(function (tile) {
         ctx.putImageData(tile.data, tile.xp * scaledImageWidth(), tile.yp * scaledImageHeight());
       });
-    } else if (drawable.type == 'interactable') {
+    } else if (drawable.type == 'interactable' && showInteractables) {
       let interactable = drawable.elem;
       let image = interactableTemplates.filter(function (template) { return template.name == interactable.type; })[0].image;
 
@@ -1310,9 +1367,8 @@ window.onload = function () {
     draw();
 
     getRequest(`/scenes/${SCENE_ID}/json`, function(data) {
-      let scene = data;
-
-      console.log(scene);
+      let user = data.user;
+      let scene = data.scene;
 
       if (scene.start_xp) {
         startingPoint = {
@@ -1336,8 +1392,6 @@ window.onload = function () {
           };
         });
 
-        console.log(shapes);
-
         shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
           shape.tiles = tileMask(shape);
         });
@@ -1357,15 +1411,15 @@ window.onload = function () {
         });
       }
 
+      if (user && user.character) {
+        imgs[0].src = `/characters/${user.character.id}/images/0`;
+        imgs[1].src = `/characters/${user.character.id}/images/1`;
+        imgs[2].src = `/characters/${user.character.id}/images/2`;
+      }
+
       makeShapes();
     });
   };
-
-  /**
-  imgs[0].src = "mario0.png";
-  imgs[1].src = "mario1.png";
-  imgs[2].src = "mario2.png";
-  */
 
   backgroundImage.src = `/scenes/${SCENE_ID}/image`;
 
@@ -1606,9 +1660,11 @@ function getRequest(url, callback) {
 }
 
 function postRequest(url, paramsData, callback) {
+  console.log(AUTH_TOKEN);
   var xhr = new XMLHttpRequest();
   xhr.open("POST", url, true);
   xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+  xhr.setRequestHeader('X-CSRF-Token', AUTH_TOKEN);
   xhr.onreadystatechange = function() {
     if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
       callback(JSON.parse(this.response));

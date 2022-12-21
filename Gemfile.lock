@@ -10,6 +10,7 @@ GEM
       tzinfo (~> 2.0)
     addressable (2.8.1)
       public_suffix (>= 2.0.2, < 6.0)
+    bcrypt (3.1.18)
     bson (4.15.0)
     carrierwave (2.2.3)
       activemodel (>= 5.0.0)
@@ -63,6 +64,7 @@ GEM
       rack-protection (= 2.2.3)
       tilt (~> 2.0)
     ssrf_filter (1.1.1)
+    sysrandom (1.0.5)
     thin (1.8.1)
       daemons (~> 1.0, >= 1.0.9)
       eventmachine (~> 1.0, >= 1.0.4)
@@ -75,11 +77,13 @@ PLATFORMS
   x86_64-darwin-19
 
 DEPENDENCIES
+  bcrypt
   carrierwave
   carrierwave-mongoid
   mongoid (~> 7.0)
   mongoid-grid_fs
   sinatra (~> 2.0)
+  sysrandom
   thin
 
 BUNDLED WITH

@@ -1,126 +1,75 @@
-<html>
-<head>
-  <style>
-    html, body {
-      width:  100%;
-      height: 100%;
-      margin: 0;
-    }
-
-    #controls {
-      position: absolute;
-      top: 10;
-      left: 10;
-      z-index: 1;
-    }
-
-    .linkForm {
-      display: none;
-    }
-
-    .textForm {
-      display: none;
-    }
-
-    .audioForm {
-      display: none;
-    }
-
-    .downloadForm {
-      display: none;
-    }
-
-    #shapeEditor {
-      background-color: lightgrey;
-    }
-
-    #controls button, #shapeEditor button, #shapeEditor label,
-    #shapeEditor input, .linkForm input, .linkForm textarea,
-    #uploadForm input, .textForm textarea {
-      display: block;
-    }
-
-    .stripey {
-      padding: 10px;
-      border-radius: 5px;
-      background: repeating-linear-gradient(45deg,#606dbc,#606dbc 10px,#465298 10px,#465298 20px);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-  </style>
-
-  <link rel="manifest" href="/site.webmanifest" />
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <link rel="mask-icon" href="/favicon.ico" color="#000000">
-
-  <script type="text/javascript">
-    const SCENE_ID = "<%= @scene.id %>";
-  </script>
-</head>
-<body>
-  <div id="messages"></div>
-  <div id="controls">
-    <button onclick="placeStartingPoint()" id="placeStartingPoint" disabled=true>place starting point</button>
-    <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
-    <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
-    <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
-    <button onclick="addInteractable('link');" id="addLink">add link</button>
-    <button onclick="addInteractable('text');" id="addText">add text</button>
-    <button onclick="addInteractable('audio')" id="addAudio">add audio</button>
-    <button onclick="addInteractable('download')" id="addDownload">add download</button>
-    <button onclick="deleteInteractables()" id="deleteInteractables">delete interactables</button>
-    <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
-    <button onclick="toggleInteractables()" id="toggleInteractables">hide interactables</button>
-    <div id="shapeEditor" style="display: none;">
-      <label for="nearScale">near scale</label>
-      <input type="number" id="nearScale" onchange="nearScaleChanged(this);"></input>
-      <label for="farScale">far scale</label>
-      <input type="number" id="farScale" onchange="farScaleChanged(this);"></input>
-      <label for="shapeType">type</label>
-      <select id="shapeType" onchange="shapeTypeChanged(this);">
-        <option value="floor">floor</option>
-        <option value="mask">mask</option>
-        <option value="block">block</option>
-        <option value="warp">warp</option>
-      </select>
-      <div style="display: none;" id="warpExtras">
-        <label>warp options</label>
-        <select id="warpType" onchange="warpTypeChanged(this);">
-          <option value="local">local</option>
-          <option value="remote">remote</option>
-        </select>
-        <input style="display: none;" id="remoteWarpID" type="text" placeholder="remote warp id"/>
-      </div>
-      <button disabled=true id="saveScales" onclick="saveScales()">save</button>
-      <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
+<div id="controls">
+  <% if current_user %>
+    <div style="background-color: lightgray;">
+      <p>signed in as: <%= current_user.name %>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/signout">sign out</a></p> 
     </div>
+    <% if current_user.character && (current_user.character.scene.nil? || current_user.character.scene != @scene) %>
+      <button id="joinScene" onclick="joinScene()">join scene</button>
+    <% end %>
+    <% if @scene.user == current_user %>
+      <script type="text/javascript">
+        CAN_EDIT = true;
+      <script>
+      <button onclick="placeStartingPoint()" id="placeStartingPoint" disabled=true>place starting point</button>
+      <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
+      <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
+      <button onclick="clearPoints()" id="clearPoints" disabled=true>clear points</button>
+      <button onclick="addInteractable('link');" id="addLink">add link</button>
+      <button onclick="addInteractable('text');" id="addText">add text</button>
+      <button onclick="addInteractable('audio')" id="addAudio">add audio</button>
+      <button onclick="addInteractable('download')" id="addDownload">add download</button>
+      <button onclick="deleteInteractables()" id="deleteInteractables">delete interactables</button>
+      <button onclick="toggleGuides()" id="toggleGuides">hide guides</button>
+    <% end %>
+  <% end %>
+  <button onclick="toggleInteractables()" id="toggleInteractables">hide interactables</button>
+  <div id="shapeEditor" style="display: none;">
+    <label for="nearScale">near scale</label>
+    <input type="number" id="nearScale" onchange="nearScaleChanged(this);"></input>
+    <label for="farScale">far scale</label>
+    <input type="number" id="farScale" onchange="farScaleChanged(this);"></input>
+    <label for="shapeType">type</label>
+    <select id="shapeType" onchange="shapeTypeChanged(this);">
+      <option value="floor">floor</option>
+      <option value="mask">mask</option>
+      <option value="block">block</option>
+      <option value="warp">warp</option>
+    </select>
+    <div style="display: none;" id="warpExtras">
+      <label>warp options</label>
+      <select id="warpType" onchange="warpTypeChanged(this);">
+        <option value="local">local</option>
+        <option value="remote">remote</option>
+      </select>
+      <input style="display: none;" id="remoteWarpID" type="text" placeholder="remote warp id"/>
+    </div>
+    <button disabled=true id="saveScales" onclick="saveScales()">save</button>
+    <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
   </div>
-  <div class="textForm proto">
-    <textarea placeholder="text content..." style="resize: none;" cols=18 rows=5></textarea>
-    <button class="go">go</button>
-    <button class="cancel">cancel</button>
-  </div>
-  <div class="linkForm proto">
-    <input class="url" type="text" placeholder="link...">
-    <textarea class="urlDescription" placeholder="description..." style="resize: none;" cols=18 rows=5></textarea>
-    <button class="go">go</button>
-    <button class="cancel">cancel</button>
-  </div>
-  <form class="audioForm proto">
-    <label>choose a file</label>
-    <input type="file" accept="audio/*"/>
-    <input type="submit" value="go"/>
-    <button class="cancel">cancel</button>
-  </form>
-  <form class="downloadForm proto">
-    <label>choose a file</label>
-    <input type="file"/>
-    <input type="submit" value="go"/>
-    <button class="cancel">cancel</button>
-  </form>
-  <canvas id="canvas" style="z-index: 0; position: relative; background-color:blue;">
-  </canvas>
-</body>
+</div>
+<div class="textForm proto">
+  <textarea placeholder="text content..." style="resize: none;" cols=18 rows=5></textarea>
+  <button class="go">go</button>
+  <button class="cancel">cancel</button>
+</div>
+<div class="linkForm proto">
+  <input class="url" type="text" placeholder="link...">
+  <textarea class="urlDescription" placeholder="description..." style="resize: none;" cols=18 rows=5></textarea>
+  <button class="go">go</button>
+  <button class="cancel">cancel</button>
+</div>
+<form class="audioForm proto">
+  <label>choose a file</label>
+  <input type="file" accept="audio/*"/>
+  <input type="submit" value="go"/>
+  <button class="cancel">cancel</button>
+</form>
+<form class="downloadForm proto">
+  <label>choose a file</label>
+  <input type="file"/>
+  <input type="submit" value="go"/>
+  <button class="cancel">cancel</button>
+</form>
+<canvas id="canvas" style="z-index: 0; position: relative; background-color:blue;">
+</canvas>
 <script src="/v.js"></script>
-</html>

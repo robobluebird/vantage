@@ -1,8 +1,12 @@
+require 'bcrypt'
 require 'sinatra'
 require 'mongoid'
 require 'mongoid/grid_fs'
 require 'carrierwave'
 require 'carrierwave/mongoid'
+require 'sysrandom'
+
+include BCrypt
 
 Mongoid.load!(File.join(File.dirname(__FILE__), 'config', 'mongoid.yml'))
 
@@ -28,6 +32,7 @@ class Scene
   embeds_many :interactables
 
   has_many :characters
+  belongs_to :user
 end
 
 class Interactable
@@ -88,10 +93,11 @@ end
 class User
   include Mongoid::Document
 
-  field :username
+  field :name
   field :password_hash
 
   has_one :character
+  has_many :scenes
 end
 
 class Character
@@ -130,6 +136,87 @@ TYPE_REMOTE_WARP = 2
 
 use Mongoid::QueryCache::Middleware
 
+use Rack::Session::Cookie, :key => 'rack.session', :path => '/', :secret => ENV.fetch('SESSION_SECRET') { SecureRandom.hex(64) }
+use Rack::Protection, permitted_origins: ['http://localhost:4567']
+use Rack::Protection::AuthenticityToken
+use Rack::Protection::RemoteToken
+
+configure :production do
+  ::Logger.class_eval { alias :write :'<<' }
+  @access_log = ::File.join(::File.dirname(::File.expand_path(__FILE__)),'log','access.log')
+  @access_logger = ::Logger.new(@access_log)
+  @error_logger = ::File.new(::File.join(::File.dirname(::File.expand_path(__FILE__)),'log','error.log'),"a+")
+  @error_logger.sync = true
+  use ::Rack::CommonLogger, @access_logger
+end
+
+helpers do
+  def current_user 
+    if session[:user_id]
+      @user ||= User.find session[:user_id]
+    end
+  end
+end
+
+get '/signin' do
+  erb :signin
+end
+
+post '/signin' do
+  user = User.find_by name: params[:name]
+
+  if Password.new(user.password_hash) == params[:password]
+    session[:user_id] = user.id.to_s
+
+    redirect to('/scenes')
+  else
+    500
+  end
+end
+
+get '/signout' do
+  session[:user_id] = nil
+  
+  redirect to('/scenes')
+end
+
+get '/signup' do
+  erb :signup
+end
+
+post '/users' do
+  if params[:name] &&
+     params[:password] &&
+     params[:password_confirmation] &&
+     !params[:name].strip.length.zero? &&
+     !params[:password].strip.length.zero? &&
+     !params[:password_confirmation].strip.length.zero? &&
+     params[:name].strip.match(/^[a-zA-Z0-9\-_]+$/) &&
+     params[:password_confirmation].strip == params[:password].strip
+
+     user = User.new
+     user.name = params[:name].strip
+     user.password_hash = Password.create params[:password].strip
+     user.save!
+
+     c = Character.new
+     c.name = user.name
+     c.user = user
+     c.save!
+
+     session[:user_id] = user.id.to_s
+
+     redirect to('/scenes')
+  else
+    500
+  end
+end
+
+get '/users' do
+  @users = User.all
+  erb :users_index
+end
+
 get '/scenes' do
   @scenes = Scene.all
 
@@ -150,7 +237,7 @@ end
 
 get '/scenes/:scene_id' do
   @scene = Scene.find params[:scene_id]
-  erb :scenes_show
+  erb :scenes_show, layout: :scene_layout
 end
 
 get '/scenes/:scene_id/image' do
@@ -163,7 +250,20 @@ end
 
 get '/scenes/:scene_id/json' do
   @scene = Scene.find params[:scene_id]
-  @scene.to_json
+
+  res = {}
+
+  if current_user
+    res = {
+      user: {
+        id: current_user.id.to_s,
+        name: current_user.name,
+        character: current_user.character ? {id: current_user.character.id.to_s} : nil
+      }
+    }
+  end
+  
+  res.merge({scene: @scene}).to_json
 end
 
 get '/interactable_templates' do
@@ -186,15 +286,6 @@ end
 get '/characters' do
   @characters = Character.all
   erb :characters_index
-end
-
-get '/characters/new' do
-  erb :characters_new
-end
-
-get '/characters/:character_id' do
-  @character = Character.find params[:character_id]
-  erb :character_show
 end
 
 get '/character/:character_id/json' do
@@ -345,6 +436,7 @@ end
 
 post '/characters' do
   c = Character.new
+
   c.name = params[:name]
   c.image0 = params[:image0][:tempfile]
   c.image1 = params[:image1][:tempfile]
@@ -354,20 +446,29 @@ post '/characters' do
   redirect to('/characters')
 end
 
-post '/interactables' do
-  i = Interactable.new
+get '/users/:user_id/character/update' do
+  @user = User.find params[:user_id]
 
-  i.xp = params[:xp]
-  i.yp = params[:yp]
-  i.size = params[:size]
-  i.data = params[:data]
-  i.shape_id = params[:shape_id]
+  erb :characters_new
+end
 
-  if i.save
-    i.to_json
-  else
-    {error: 'problem'}.to_json
-  end
+get '/users/:user_id' do
+  @user = User.find params[:user_id]
+
+  erb :users_show
+end
+
+post '/users/:user_id/character' do
+  user = User.find params[:user_id]
+  character = user.character
+
+  character.image0 = params[:image0][:tempfile]
+  character.image1 = params[:image1][:tempfile]
+  character.image2 = params[:image2][:tempfile]
+
+  character.save!
+
+  redirect to("/users/#{user.id.to_s}")
 end
 
 post '/scenes/:scene_id' do
@@ -385,17 +486,5 @@ post '/scenes/:scene_id' do
     s.to_json
   else
     {error: 'blep'}.to_json
-  end
-end
-
-post '/characters/:character_id' do
-  c = Character.find params[:character_id]
-
-  # DO STUFF
-
-  if c.save
-    c.to_json
-  else
-    {error: 'problem c'}.to_json
   end
 end

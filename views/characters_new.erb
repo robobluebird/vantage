@@ -1,21 +1,10 @@
-<html>
-  <body>
-    <form action="/characters" method="POST" enctype="multipart/form-data">
-      <div>
-        <label for="name">name</label>
-        <input type="text" name="name"/>
-      </div>
-      <div>
-        <label for="image0">image 0</label>
-        <input type="file" name="image0"/>
-        <label for="image1">image 1</label>
-        <input type="file" name="image1"/>
-        <label for="image2">image 2</label>
-        <input type="file" name="image2"/>
-      </div>
-      <div>
-        <input type="submit"/>
-      </div>
-    </form>
-  </body>
-</html>
+<form action="/users/<%= @user.id %>/character" method="POST" enctype="multipart/form-data">
+  <input type="hidden" name="authenticity_token" value="<%= env['rack.session'][:csrf] %>" />
+  <label for="image0">image 0</label>
+  <input type="file" name="image0"/>
+  <label for="image1">image 1</label>
+  <input type="file" name="image1"/>
+  <label for="image2">image 2</label>
+  <input type="file" name="image2"/>
+  <input type="submit"/>
+</form>

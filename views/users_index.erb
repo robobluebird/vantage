@@ -1,0 +1,17 @@
+<ul>
+  <% @users.each do |user| %>
+    <li>
+      <p><a href="/users/<%= user.id %>"><%= user.name %></a></p>
+      <% if user.character && user.character.image0.file %>
+        <div>
+          <img style="width: 20px; height: 20px;" src="/characters/<%= user.character.id %>/images/0"></img>
+          <img style="width: 20px; height: 20px;" src="/characters/<%= user.character.id %>/images/1"></img>
+          <img style="width: 20px; height: 20px;" src="/characters/<%= user.character.id %>/images/2"></img>
+        </div>
+      <% end %>
+      <% if current_user && current_user.id == user.id %>
+        <p><a href="/users/<%= user.id %>/character/update">update</a></p>
+      <% end %>
+    </li>
+  <% end %>
+</ul>

@@ -4,23 +4,30 @@
       <div>
         <a href="/scenes/<%= scene.id %>"><%= scene.id %></a>
       </div>
-      <div>
-        <p>start_xp: <%= scene.start_xp %>, start_yp: <%= scene.start_yp %></p>
-      </div>
-      <div>
-      <% scene.shapes.each do |shape| %>
-        <div>
-          <div>
-            <p>shape type: <%= shape.shape_type %></p>
-            <p>points:</p>
-            <p>
-              <% shape.points.each do |point| %>
-                <p>xp: <%= point[:xp] %>, yp: <%= point[:yp] %></p>
+      <img src="/scenes/<%= scene.id %>/image" style="width: 100px;"></img>
+      <details>
+        <summary>details</summary>
+        <ul>
+          <li>start_xp: <%= scene.start_xp %></li>
+          <li>start_yp: <%= scene.start_yp %></li>
+          <li>
+            <span>shapes</span>
+            <ul>
+              <% scene.shapes.each do |shape| %>
+                <li>
+                  <p>shape type: <%= shape.shape_type %></p>
+                  <p>points:</p>
+                  <p>
+                    <% shape.points.each do |point| %>
+                      <p>xp: <%= point[:xp] %>, yp: <%= point[:yp] %></p>
+                    <% end %>
+                  </p>
+                </li>
               <% end %>
-            </p>
-          </div>
-        </div>
-      <% end %>
+            </ul>
+          </li>
+        </ul>
+      </details>
     </li>
   <% end %>
 </ul>

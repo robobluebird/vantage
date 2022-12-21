@@ -1,8 +1,5 @@
-<html>
-  <body>
-    <form action="/scenes" method="POST"  enctype="multipart/form-data">
-        <input type="file" name="file" accept="image/png, image/jpeg"/>
-        <input type="submit"/>
-    </form>
-  </body>
-</html>
+<form action="/scenes" method="POST" enctype="multipart/form-data">
+  <input type="hidden" name="authenticity_token" value="<%= env['rack.session'][:csrf] %>" />
+  <input type="file" name="file" accept="image/png, image/jpeg"/>
+  <input type="submit"/>
+</form>
