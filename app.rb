@@ -31,8 +31,8 @@ class Scene
   embeds_many :shapes
   embeds_many :interactables
 
-  has_many :characters
   belongs_to :user
+  has_many :characters
 end
 
 class Interactable
@@ -112,8 +112,8 @@ class Character
   field :name, type: String
 
   has_many :treasures
-  belongs_to :scene, optional: true
   belongs_to :user, optional: true
+  belongs_to :scene, optional: true
 end
 
 class Treasure
@@ -249,6 +249,9 @@ get '/scenes/:scene_id/image' do
 end
 
 get '/scenes/:scene_id/json' do
+  # get the shape characters into this? so wait, a character goes into a shape? a shape embedded by a scene? what does this mean?
+  # MAYBE if character just associates with a scene then we can do shape shit on the client side
+
   @scene = Scene.find params[:scene_id]
 
   res = {}
@@ -450,6 +453,23 @@ get '/users/:user_id/character/update' do
   @user = User.find params[:user_id]
 
   erb :characters_new
+end
+
+post '/users/:user_id/character/update' do
+  puts params
+  character = User.find(params[:user_id]).character
+
+  if character.nil?
+    return 500
+  end
+
+  character.xp = params[:xp]
+  character.yp = params[:yp]
+  character.scene_id = params[:scene_id]
+
+  character.save!
+
+  character.to_json
 end
 
 get '/users/:user_id' do

@@ -56,7 +56,7 @@ let deletingInteractables = false;
 let placingStartingPoint = false;
 let placingInteractable;
 let configuringInteractable;
-let makingShapes = true;
+let makingShapes = CAN_EDIT;
 let maskSecondPoint = null;
 let editingShapes = false;
 let currentEditingShape;
@@ -859,6 +859,11 @@ function toggleInteractables() {
 }
 
 function joinScene() {
+  if (!startingPoint) {
+    console.log("no starting point!");
+    return;
+  }
+
   let width = idealPlacingWidth;
   let height = idealPlacingHeight;
 
@@ -882,22 +887,47 @@ function joinScene() {
       height = imgs[0].naturalHeight * imageScale;
   }
 
+  let startShapes = shapes.filter(function (shape) {
+    return adaptedPointIsInPolygon({x: startingPoint.xp * scaledImageWidth(), y: startingPoint.yp * scaledImageHeight()}, shape.points);
+  });
+
+  if (startShapes.length == 0) {
+    console.log("start point isn't in a shape");
+    return;
+  }
+
+  if (startShapes[0].type != 'floor') {
+    console.log("start point isn't in a FLOOR");
+    return;
+  }
+
   characters.push({
-      objectType: 'character',
-      images: imgs,
-      xp: e.clientX / scaledImageWidth(),
-      yp: e.clientY / scaledImageHeight(),
-      width: width,
-      height: height,
-      shape: shape,
-      flip: false,
-      frame: 0,
-      warpedTo: null
+    objectType: 'character',
+    images: imgs,
+    xp: startingPoint.xp,
+    yp: startingPoint.yp,
+    width: width,
+    height: height,
+    shape: startShapes[0],
+    flip: false,
+    frame: 0,
+    warpedTo: null
   })
 
   idealPlacingWidth = null;
   idealPlacingHeight = null;
   canvas.onmousemove = null;
+
+  let params = `xp=${startingPoint.xp}&yp=${startingPoint.yp}&scene_id=${SCENE_ID}`;
+
+  postRequest(`/users/${USER_ID}/character/update`, params, function(result) {
+    if (result.error) {
+      console.log(`something happened: ${result.error}`);
+    } else {
+      // I guess it all went okay?
+      console.log('I guess it all went okay?');
+    }
+  });
 
   makeShapes();
 }
@@ -922,17 +952,19 @@ function toggleGuides() {
     showGuides = false;
     draw();
   } else {
-    document.getElementById("placeStartingPoint").style.display = "block";
-    document.getElementById("makeShapes").style.display = "block";
-    document.getElementById("editShapes").style.display = "block";
-    document.getElementById("clearPoints").style.display = "block";
-    document.getElementById("shapeEditor").style.display = "none";
-    document.getElementById("addLink").style.display = "block";
-    document.getElementById("deleteInteractables").style.display = "block";
-    document.getElementById("addText").style.display = "block";
-    document.getElementById("addAudio").style.display = "block";
-    document.getElementById("addDownload").style.display = "block";
-    document.getElementById("toggleGuides").innerText = "hide guides";
+    if (CAN_EDIT) {
+      document.getElementById("placeStartingPoint").style.display = "block";
+      document.getElementById("makeShapes").style.display = "block";
+      document.getElementById("editShapes").style.display = "block";
+      document.getElementById("clearPoints").style.display = "block";
+      document.getElementById("shapeEditor").style.display = "none";
+      document.getElementById("addLink").style.display = "block";
+      document.getElementById("deleteInteractables").style.display = "block";
+      document.getElementById("addText").style.display = "block";
+      document.getElementById("addAudio").style.display = "block";
+      document.getElementById("addDownload").style.display = "block";
+      document.getElementById("toggleGuides").innerText = "hide guides";
+    }
     showGuides = true;
     makeShapes();
   }
