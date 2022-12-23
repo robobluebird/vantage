@@ -1,9 +1,6 @@
 <div id="controls">
   <% if current_user %>
-    <div style="background-color: lightgray;">
-      <p>signed in as: <%= current_user.name %>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/signout">sign out</a></p> 
-    </div>
-    <% if current_user.character && !current_user.character.shape || current_user.shape.scene != @scene %>
+    <% if current_user.character && (!current_user.character.scene || current_user.character.scene != @scene) %>
       <button id="joinScene" onclick="joinScene()">join scene</button>
     <% end %>
     <% if @scene.user == current_user %>

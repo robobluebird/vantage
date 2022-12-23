@@ -1,8 +1,8 @@
 let mediaType = 0;
+let printedOnce = false;
 
 const canvas = document.getElementById("canvas");
 const points = [];
-const characters = [];
 const interactableTemplates = [
   {
     name: 'link',
@@ -43,6 +43,7 @@ const backgroundImage = new Image();
 const backgroundWidth = 0;
 const backgroundHeight = 0;
 
+let characters = [];
 let showInteractables = true;
 let interactables = []; // LINKS, IMAGES, TEXT, VIDEO
 let shapes = [];
@@ -184,8 +185,10 @@ function saveScales() {
 
     if (shapeTypeSelectValue == 'floor') {
       currentEditingShape.tiles = null;
+      currentEditingShape.sortedTiles = null;
     } else if (shapeTypeSelectValue == 'mask') {
       currentEditingShape.tiles = tileMask(currentEditingShape);
+      currentEditingShape.sortedTiles = null;
     }
 
     if (shapeTypeSelectValue != 'warp') {
@@ -426,6 +429,8 @@ function generateUUID() { // Public Domain/MIT
 }
 
 canvas.onclick = function (e) {
+  if (!CAN_EDIT) return;
+
   if (deletingInteractables) {
     let foundInteractableIndex = interactables.findIndex(function(interactable) {
       let iX = interactable.xp * scaledImageWidth();
@@ -868,23 +873,23 @@ function joinScene() {
   let height = idealPlacingHeight;
 
   if (!width || !height) {
-      let imageScale = 0;
-      let idealSize;
+    let imageScale = 0;
+    let idealSize;
 
-      if (backgroundImage.naturalWidth > backgroundImage.naturalHeight) {
-          idealSize = backgroundImage.naturalWidth * .1;
-      } else {
-          idealSize = backgroundImage.naturalHeight * .1;
-      }
+    if (backgroundImage.naturalWidth > backgroundImage.naturalHeight) {
+      idealSize = backgroundImage.naturalWidth * .1;
+    } else {
+      idealSize = backgroundImage.naturalHeight * .1;
+    }
 
-      if (imgs[0].naturalWidth > imgs[0].naturalHeight) {
-          imageScale = idealSize / imgs[0].naturalWidth;
-      } else {
-          imageScale = idealSize / imgs[0].naturalHeight;
-      }
+    if (imgs[0].naturalWidth > imgs[0].naturalHeight) {
+      imageScale = idealSize / imgs[0].naturalWidth;
+    } else {
+      imageScale = idealSize / imgs[0].naturalHeight;
+    }
 
-      width = imgs[0].naturalWidth * imageScale;
-      height = imgs[0].naturalHeight * imageScale;
+    width = imgs[0].naturalWidth * imageScale;
+    height = imgs[0].naturalHeight * imageScale;
   }
 
   let startShapes = shapes.filter(function (shape) {
@@ -983,7 +988,7 @@ function draw() {
   ctx.drawImage(backgroundImage, 0, 0, scaledImageWidth(), scaledImageHeight());
 
   if (!showGuides) {
-    shapes.filter(function (shape) { return shape.tiles; }).forEach(function (shape) {
+    shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
       shape.tiles.forEach(function (tile) {
         if (!tile.data) {
           tile.data = ctx.getImageData(
@@ -1070,7 +1075,7 @@ function draw() {
       }
     }
 
-    shapes.filter(function (shape) { return shape.tiles; }).forEach(function (shape) {
+    shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
       shape.tiles.forEach(function (tile) {
         ctx.beginPath();
         ctx.fillStyle = `rgba(${getRandomInt(256)}, ${getRandomInt(256)}, ${getRandomInt(256)}, 1.0)`;
@@ -1244,19 +1249,22 @@ function collidingInteractables() {
 function sortedDrawables() {
   return characters.concat(interactables).concat(shapes.filter(function (shape) { return shape.type == 'mask'; })).map(function (elem) {
     if (elem.objectType == 'shape') {
-      let sortedTiles = [...elem.tiles].sort(function (a, b) {
-        if ((a.yp * scaledImageHeight()) + a.size < (b.yp * scaledImageHeight()) + b.size) {
-          return 1;
-        } else if ((a.yp * scaledImageHeight()) + a.size > (b.yp * scaledImageHeight()) + b.size) {
-          return -1;
-        } else {
-          return 0;
-        }
-      });
+      if (!elem.sortedTiles) {
+        elem.sortedTiles = [...elem.tiles].sort(function (a, b) {
+          if ((a.yp * scaledImageHeight()) + a.syp < (b.yp * scaledImageHeight()) + b.syp) {
+            return 1;
+          } else if ((a.yp * scaledImageHeight()) + a.syp > (b.yp * scaledImageHeight()) + b.syp) {
+            return -1;
+          } else {
+            return 0;
+          }
+        });
+      }
+
       return {
         elem: elem,
         type: 'mask',
-        bottom: (sortedTiles[0].yp * scaledImageHeight()) + sortedTiles[0].size
+        bottom: (elem.sortedTiles[0].yp * scaledImageHeight()) + elem.sortedTiles[0].syp
       };
     } else if (elem.objectType == 'character') {
       let tScale = ((elem.yp * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) / ((elem.shape.maxYP * scaledImageHeight()) - (elem.shape.minYP * scaledImageHeight())) * (elem.shape.nearScale - elem.shape.farScale) + elem.shape.farScale;
@@ -1268,7 +1276,7 @@ function sortedDrawables() {
         y: (elem.yp * scaledImageHeight()) - (elem.height * tScale),
         width: elem.width * tScale,
         height: elem.height * tScale,
-        bottom: ((elem.yp * scaledImageHeight()) - (elem.height * tScale)) + (elem.height * tScale)
+        bottom: elem.yp * scaledImageHeight()
       };
     } else if (elem.objectType == 'interactable') {
       return {
@@ -1387,6 +1395,7 @@ window.onresize = function () {
 
   shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
     shape.tiles = tileMask(shape);
+    shape.sortedTiles = null;
   });
 
   draw();
@@ -1399,6 +1408,8 @@ window.onload = function () {
     draw();
 
     getRequest(`/scenes/${SCENE_ID}/json`, function(data) {
+      console.log(data);
+
       let user = data.user;
       let scene = data.scene;
 
@@ -1412,7 +1423,7 @@ window.onload = function () {
       if (scene.shapes) {
         shapes = scene.shapes.map(function(shape) {
           return {
-            id: shape._id.$oid,
+            id: shape.id,
             objectType: 'shape',
             nearScale: shape.near_scale,
             farScale: shape.far_scale,
@@ -1426,6 +1437,7 @@ window.onload = function () {
 
         shapes.filter(function (shape) { return shape.type == 'mask'; }).forEach(function (shape) {
           shape.tiles = tileMask(shape);
+          shape.sortedTiles = null;
         });
       }
 
@@ -1433,7 +1445,7 @@ window.onload = function () {
         interactables = scene.interactables.map(function(interactable) {
           return {
             objectType: 'interactable',
-            id: interactable._id.$oid,
+            id: interactable.id,
             type: interactable.interactable_type,
             data: interactable.data,
             xp: interactable.xp,
@@ -1443,13 +1455,79 @@ window.onload = function () {
         });
       }
 
+      if (scene.characters) {
+        characters = scene.characters.map(function(character) {
+          return {
+            objectType: 'character',
+            id: character.id,
+            images: [new Image(), new Image(), new Image()],
+            xp: character.xp,
+            yp: character.yp,
+            shape: shapes.filter(function(shape) {
+              return adaptedPointIsInPolygon({ x: character.xp * scaledImageWidth(), y: character.yp * scaledImageHeight() }, shape.points) &&
+                     shape.type == 'floor';
+            })[0],
+            flip: false,
+            frame: 0,
+            warpedTo: null
+          }
+        });
+
+        if (characters.length > 0) {
+          if (CHARACTER_ID) {
+            let foundMyOwnCharacterIndex = characters.findIndex(function(character) { return character.id == CHARACTER_ID; });
+
+            if (foundMyOwnCharacterIndex > -1 && foundMyOwnCharacterIndex != 0) {
+              let character = characters.splice(index, 1);
+              characters.unshift(character);
+            }
+          }
+
+          let index = 0;
+          Promise.all(characters.map(function(character) {
+            return character.images;
+          }).flat().map(function(image) {
+            return new Promise(function(resolve, reject) {
+              image.onload = function() {
+                resolve(image);
+              };
+
+              image.src = `/characters/${characters[Math.floor(index / 3)].id}/images/${index % 3}`
+              index++;
+            });
+          })).then(function() {
+            characters.forEach(function(character) {
+              let imageScale = 0;
+              let idealSize;
+
+              if (backgroundImage.naturalWidth > backgroundImage.naturalHeight) {
+                idealSize = backgroundImage.naturalWidth * .1;
+              } else {
+                idealSize = backgroundImage.naturalHeight * .1;
+              }
+
+              if (character.images[0].naturalWidth > character.images[0].naturalHeight) {
+                imageScale = idealSize / character.images[0].naturalWidth;
+              } else {
+                imageScale = idealSize / character.images[0].naturalHeight;
+              }
+
+              character.width = character.images[0].naturalWidth * imageScale;
+              character.height = character.images[0].naturalHeight * imageScale;
+            });
+
+            makeShapes();
+          });
+        } else {
+          makeShapes();
+        }
+      }
+
       if (user && user.character) {
         imgs[0].src = `/characters/${user.character.id}/images/0`;
         imgs[1].src = `/characters/${user.character.id}/images/1`;
         imgs[2].src = `/characters/${user.character.id}/images/2`;
       }
-
-      makeShapes();
     });
   };
 
@@ -1526,6 +1604,8 @@ function drawImage(context, image, x, y, width, height, deg, flip, flop, center)
 }
 
 const t = setInterval(function () {
+  let anyMovementKeys = keys.up || keys.down || keys.left || keys.right;
+
   if (characters.length === 0) {
     keys.up = false;
     keys.down = false;
@@ -1666,6 +1746,10 @@ const t = setInterval(function () {
     }
   } else {
     characters[0].frame = 0;
+  }
+
+  if (anyMovementKeys && (!keys.up && !keys.down && !keys.left && !keys.right)) {
+    // update the server
   }
 
   draw();

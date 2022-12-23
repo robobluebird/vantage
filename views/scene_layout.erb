@@ -57,11 +57,21 @@
     <script type="text/javascript">
       const SCENE_ID = "<%= @scene.id %>";
       const USER_ID = "<%= current_user ? current_user.id : nil %>";
+      const CHARACTER_ID = "<%= current_user && current_user.character ? current_user.character.id.to_s : nil %>";
       const AUTH_TOKEN = "<%= env['rack.session'][:csrf] %>";
       let CAN_EDIT = false;
     </script>
   </head>
   <body>
+    <% if current_user %>
+      <div style="position: absolute; top: 0; right: 0; background-color: lightgray;">
+        <p>signed in as: <%= current_user.name %>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/signout">sign out</a></p> 
+      </div>
+    <% else %>
+      <div style="position: absolute; top: 0; right: 0; background-color: lightgray;">
+        <p><a href="/signin">sign in</a></p>
+      </div>
+    <% end %>
     <%= yield %>
   </body>
 </html>
