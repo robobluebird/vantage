@@ -1,3 +1,4 @@
+require 'sinatra'
 require 'mongoid'
 require 'mongoid/grid_fs'
 require 'carrierwave'

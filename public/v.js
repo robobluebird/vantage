@@ -1,5 +1,7 @@
 let mediaType = 0;
 let printedOnce = false;
+let didMoveLastFrame = false;
+let canControl = false;
 
 const canvas = document.getElementById("canvas");
 const points = [];
@@ -210,29 +212,37 @@ function saveScales() {
       document.querySelector('#warpExtras').style.display = 'block';
     }
 
-    if (potentialLocalWarpPoint) {
-      let warpTo = shapes.filter(function (shape) { return shape.id == potentialLocalWarpPoint })[0];
+    if (shapeTypeSelectValue == 'warp') {
+      if (potentialLocalWarpPoint) {
+        let warpTo = shapes.filter(function (shape) { return shape.id == potentialLocalWarpPoint })[0];
 
-      if (warpTo) {
-        let warpData = {
-          type: 'local',
-          id: warpTo.id
-        };
+        if (warpTo) {
+          let warpData = {
+            type: 'local',
+            id: warpTo.id
+          };
 
-        currentEditingShape.warpData = warpData;
+          currentEditingShape.warpData = warpData;
 
-        paramsData = paramsData.concat(`&warp=local|${warpTo.id}`);
+          paramsData = paramsData.concat(`&warp=local|${warpTo.id}`);
 
-        warpToData = {
-          type: 'local',
-          id: currentEditingShape.id
-        };
+          warpToData = {
+            type: 'local',
+            id: currentEditingShape.id
+          };
 
-        warpTo.warpData = warpToData;
+          warpTo.warpData = warpToData;
+        }
+
+        potentialLocalWarpPoint = null;
+        choosingLocalWarpPoint = false;
+      } else {
+        let remoteID = document.querySelector('#remoteWarpID').value;
+
+        if (remoteID.length > 0) {
+          paramsData = paramsData.concat(`&warp=remote|${remoteID}`);
+        }
       }
-
-      potentialLocalWarpPoint = null;
-      choosingLocalWarpPoint = false;
     }
 
     postRequest(`/scenes/${SCENE_ID}/shapes/${currentEditingShape.id}`, paramsData, function(result) {
@@ -289,11 +299,23 @@ function chooseWarpExit() {
 }
 
 function warpTypeChanged(elem) {
-  if (editingShapes && currentEditingShape && elem.value != currentEditingShape.warpType) {
+  if (editingShapes && currentEditingShape && (!currentEditingShape.warpData || elem.value != currentEditingShape.warpData.type)) {
     if (elem.value == 'local') {
       choosingLocalWarpPoint = true;
+      document.querySelector('#remoteWarpID').style.display = 'none';
     } else if (elem.value == 'remote') {
+      choosingLocalWarpPoint = false;
+      document.querySelector('#remoteWarpID').style.display = 'block';
     }
+  }
+
+  draw();
+}
+
+function remoteWarpIDChanged(elem) {
+  if (editingShapes && currentEditingShape && (!currentEditingShape.warpData || elem.value != currentEditingShape.warpData.id)) {
+    choosingLocalWarpPoint = false;
+    document.querySelector('#saveScales').disabled = false;
   }
 
   draw();
@@ -666,6 +688,9 @@ function setEditDetails() {
 
       if (currentEditingShape.warpData.type == 'remote') {
         document.querySelector('#remoteWarpID').value = currentEditingShape.warpData.id;
+        document.querySelector('#remoteWarpID').style.display = 'block';
+      } else {
+        document.querySelector('#remoteWarpID').style.display = 'none';
       }
     }
   } else {
@@ -906,7 +931,7 @@ function joinScene() {
     return;
   }
 
-  characters.push({
+  characters.unshift({
     objectType: 'character',
     images: imgs,
     xp: startingPoint.xp,
@@ -919,6 +944,7 @@ function joinScene() {
     warpedTo: null
   })
 
+  canControl = true;
   idealPlacingWidth = null;
   idealPlacingHeight = null;
   canvas.onmousemove = null;
@@ -1477,9 +1503,10 @@ window.onload = function () {
           if (CHARACTER_ID) {
             let foundMyOwnCharacterIndex = characters.findIndex(function(character) { return character.id == CHARACTER_ID; });
 
-            if (foundMyOwnCharacterIndex > -1 && foundMyOwnCharacterIndex != 0) {
-              let character = characters.splice(index, 1);
+            if (foundMyOwnCharacterIndex > -1) {
+              let character = characters.splice(foundMyOwnCharacterIndex, 1)[0];
               characters.unshift(character);
+              canControl = true;
             }
           }
 
@@ -1523,7 +1550,7 @@ window.onload = function () {
         }
       }
 
-      if (user && user.character) {
+      if (user && user.character && user.has_images) {
         imgs[0].src = `/characters/${user.character.id}/images/0`;
         imgs[1].src = `/characters/${user.character.id}/images/1`;
         imgs[2].src = `/characters/${user.character.id}/images/2`;
@@ -1604,14 +1631,16 @@ function drawImage(context, image, x, y, width, height, deg, flip, flop, center)
 }
 
 const t = setInterval(function () {
-  let anyMovementKeys = keys.up || keys.down || keys.left || keys.right;
-
   if (characters.length === 0) {
     keys.up = false;
     keys.down = false;
     keys.left = false;
     keys.right = false;
     keys.interact = false;
+    return;
+  }
+
+  if (!canControl) {
     return;
   }
 
@@ -1680,6 +1709,8 @@ const t = setInterval(function () {
   }
 
   if (changed) {
+    didMoveLastFrame = true;
+
     let xShapes = {};
     let yShapes = {};
 
@@ -1724,19 +1755,40 @@ const t = setInterval(function () {
     }
 
     if (foundWarpX && foundWarpX.warpData) {
-      let warpTo = shapes.filter(function (shape) { return shape.id == foundWarpX.warpData.id })[0];
+      if (foundWarpX.warpData.type == 'remote') {
+        // '/characters/:character_id/warp/:warp_id'
+        postRequest(`/characters/${characters[0].id}/warp/${foundWarpX.warpData.id}`, null, function(result) {
+          if (result.error) {
+            console.log('oh no', error);
+          } else {
+            window.location.href = `/scenes/${foundWarpX.warpData.id}`
+          }
+        });
+      } else if (foundWarpX.warpData.type == 'local') {
+        let warpTo = shapes.filter(function (shape) { return shape.id == foundWarpX.warpData.id })[0];
 
-      characters[0].warpedTo = warpTo;
-      characters[0].shape = warpTo;
-      characters[0].xp = warpTo.points[0].xp;
-      characters[0].yp = warpTo.points[0].yp;
+        characters[0].warpedTo = warpTo;
+        characters[0].shape = warpTo;
+        characters[0].xp = warpTo.points[0].xp;
+        characters[0].yp = warpTo.points[0].yp;
+      }
     } else if (foundWarpY && foundWarpY.warpData) {
-      let warpTo = shapes.filter(function (shape) { return shape.id == foundWarpY.warpData.id })[0];
+      if (foundWarpY.warpData.type == 'remote') {
+        postRequest(`/characters/${characters[0].id}/warp/${foundWarpY.warpData.id}`, null, function(result) {
+          if (result.error) {
+            console.log('oh no', error);
+          } else {
+            window.location.href = `/scenes/${foundWarpY.warpData.id}`
+          }
+        });
+      } else if (foundWarpY.warpData.type == 'local') {
+        let warpTo = shapes.filter(function (shape) { return shape.id == foundWarpY.warpData.id })[0];
 
-      characters[0].warpedTo = warpTo;
-      characters[0].shape = warpTo;
-      characters[0].xp = warpTo.points[0].xp;
-      characters[0].yp = warpTo.points[0].yp;
+        characters[0].warpedTo = warpTo;
+        characters[0].shape = warpTo;
+        characters[0].xp = warpTo.points[0].xp;
+        characters[0].yp = warpTo.points[0].yp;
+      }
     } else if (xShape &&
       yShape &&
       xShape.id == yShape.id &&
@@ -1746,10 +1798,19 @@ const t = setInterval(function () {
     }
   } else {
     characters[0].frame = 0;
-  }
 
-  if (anyMovementKeys && (!keys.up && !keys.down && !keys.left && !keys.right)) {
-    // update the server
+    if (didMoveLastFrame && USER_ID && characters[0].shape.type == 'floor') {
+      let params = `xp=${characters[0].xp}&yp=${characters[0].yp}`;
+      postRequest(`/users/${USER_ID}/character/update`, params, function(data, error) {
+        if (error) {
+          console.log('oh no', error);
+        } else {
+          console.log('i guess it was fine?');
+        }
+      });
+    }
+
+    didMoveLastFrame = false;
   }
 
   draw();
@@ -1776,7 +1837,6 @@ function getRequest(url, callback) {
 }
 
 function postRequest(url, paramsData, callback) {
-  console.log(AUTH_TOKEN);
   var xhr = new XMLHttpRequest();
   xhr.open("POST", url, true);
   xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");

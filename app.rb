@@ -114,10 +114,15 @@ get '/void' do
 end
 
 get '/tally' do
-  Scene.all.count.to_json
+  scene = Scene.find '6385f4474b0086138644f863'
+  scene.user = current_user
+  scene.save!
+  redirect to('/scenes')
 end
 
 get '/scenes/new' do
+  redirect to("/signin") unless current_user
+
   erb :scenes_new
 end
 
@@ -135,9 +140,6 @@ get '/scenes/:scene_id/image' do
 end
 
 get '/scenes/:scene_id/json' do
-  # get the shape characters into this? so wait, a character goes into a shape? a shape embedded by a scene? what does this mean?
-  # MAYBE if character just associates with a scene then we can do shape shit on the client side
-
   @scene = Scene.find params[:scene_id]
 
   res = {}
@@ -147,7 +149,8 @@ get '/scenes/:scene_id/json' do
       user: {
         id: current_user.id.to_s,
         name: current_user.name,
-        character: current_user.character ? {id: current_user.character.id.to_s} : nil
+        character: current_user.character ? {id: current_user.character.id.to_s} : nil,
+        has_images: !!current_user.character.image0.url
       }
     }
   end
@@ -166,7 +169,7 @@ get '/scenes/:scene_id/json' do
         max_yp: shape.max_yp,
         shape_type: shape.shape_type,
         points: shape.points,
-        warp: shape.warp ? {warp_id: shape.warp_id, warp_type: shape.warp_type} : nil
+        warp: shape.warp ? {warp_id: shape.warp.warp_id, warp_type: shape.warp.warp_type} : nil
       }},
       interactables: @scene.interactables.map { |interactable| {
         id: interactable.id.to_s,
@@ -220,6 +223,17 @@ get '/characters/:character_id/images/:image_index' do
   send_file t, type: @character.send("image#{params[:image_index]}").file.content_type, disposition: "inline"
 end
 
+get '/users/:user_id/character/update' do
+  @user = User.find params[:user_id]
+
+  erb :characters_new
+end
+
+get '/users/:user_id' do
+  @user = User.find params[:user_id]
+  erb :users_show
+end
+
 post '/interactable_templates' do
   i = InteractableTemplate.new
   i.interactable_type = params[:template_type]
@@ -229,9 +243,15 @@ post '/interactable_templates' do
 end
 
 post '/scenes' do
+  if current_user.nil?
+    halt 500
+  end
+
   s = Scene.new
   s.image = params[:file][:tempfile]
+  s.user = current_user
   s.save!
+
   redirect to("/scenes/#{s.id}/image")
 end
 
@@ -262,7 +282,7 @@ post '/scenes/:scene_id/shapes' do
   if s.save!
     s.to_json
   else
-      {error: 'wut'}.to_json
+    {error: 'wut'}.to_json
   end
 end
 
@@ -308,6 +328,8 @@ post '/scenes/:scene_id/shapes/:shape_id' do
   shape.far_scale = params[:far_scale]
   shape.shape_type = params[:shape_type]
 
+  shape.save!
+
   if params[:warp]
     if params[:warp] == "null"
       if shape.warp && shape.warp.warp_type == 'local'
@@ -324,26 +346,48 @@ post '/scenes/:scene_id/shapes/:shape_id' do
       if warp_type_and_id.first == 'local'
         warp.warp_type = 'local'
         warp.warp_id = warp_type_and_id.last
+        warp.shape = shape
+
+        warp.save!
 
         warp_to = scene.shapes.find warp_type_and_id.last
         warp_to_data = Warp.new
         warp_to_data.warp_type = 'local'
         warp_to_data.warp_id = shape.id.to_s
-        warp_to.warp = warp_to_data
-        warp_to.save!
+        warp_to_data.shape = warp_to
 
-        shape.warp = warp
-        shape.save!
+        warp_to_data.save!
       else
         warp.warp_type = 'remote'
         warp.warp_id = warp_type_and_id.last
-        
-        shape.save!
+        warp.shape = shape
+
+        warp.save!
       end
     end
   end
 
   shape.to_json
+end
+
+post '/characters/:character_id/warp/:warp_id' do
+  if current_user && current_user.character && current_user.character.id.to_s == params[:character_id]
+    warp_scene = Scene.find params[:warp_id]
+
+    halt 500 unless warp_scene && warp_scene.start_xp && warp_scene.start_yp
+
+    c = current_user.character
+    c.xp = warp_scene.start_xp
+    c.yp = warp_scene.start_yp
+    c.scene = warp_scene
+    c.save!
+
+    puts c.inspect
+
+    {data: {status: 'ok'}}.to_json
+  else
+    500
+  end
 end
 
 post '/scenes/:scene_id/shapes/:shape_id/delete' do
@@ -365,12 +409,6 @@ post '/characters' do
   redirect to('/characters')
 end
 
-get '/users/:user_id/character/update' do
-  @user = User.find params[:user_id]
-
-  erb :characters_new
-end
-
 post '/users/:user_id/character/update' do
   character = User.find(params[:user_id]).character
 
@@ -380,17 +418,11 @@ post '/users/:user_id/character/update' do
 
   character.xp = params[:xp]
   character.yp = params[:yp]
-  character.scene_id = params[:scene_id]
+  character.scene_id = params[:scene_id] if params[:scene_id]
 
   character.save!
 
   character.to_json
-end
-
-get '/users/:user_id' do
-  @user = User.find params[:user_id]
-
-  erb :users_show
 end
 
 post '/users/:user_id/character' do

@@ -1,12 +1,12 @@
 <div id="controls">
   <% if current_user %>
-    <% if current_user.character && (!current_user.character.scene || current_user.character.scene != @scene) %>
+    <% if current_user.character && current_user.character.image0.url && (!current_user.character.scene || current_user.character.scene != @scene) %>
       <button id="joinScene" onclick="joinScene()">join scene</button>
     <% end %>
     <% if @scene.user == current_user %>
       <script type="text/javascript">
         CAN_EDIT = true;
-      <script>
+      </script>
       <button onclick="placeStartingPoint()" id="placeStartingPoint" disabled=true>place starting point</button>
       <button onclick="makeShapes()" id="makeShapes" disabled=true>make shapes</button>
       <button onclick="editShapes()" id="editShapes" disabled=true>edit shapes</button>
@@ -38,7 +38,7 @@
         <option value="local">local</option>
         <option value="remote">remote</option>
       </select>
-      <input style="display: none;" id="remoteWarpID" type="text" placeholder="remote warp id"/>
+      <input onchange="remoteWarpIDChanged(this);" style="display: none;" id="remoteWarpID" type="text" placeholder="remote warp id"/>
     </div>
     <button disabled=true id="saveScales" onclick="saveScales()">save</button>
     <button disabled=true id="deleteShape" onclick="deleteShape()">delete</button>
