@@ -36,11 +36,15 @@ end
 class Interactable
   include Mongoid::Document
 
+  mount_uploader :file, ImageUploader
+
   field :interactable_type
   field :xp, type: Float
   field :yp, type: Float
   field :size, type: Float
-  field :data, type: Hash
+  field :url
+  field :description
+  field :text
 
   embedded_in :scene
 end
@@ -68,15 +72,6 @@ class Shape
   embeds_one :warp
 
   embedded_in :scene
-end
-
-class Point
-  include Mongoid::Document
-
-  field :xp, type: Float
-  field :yp, type: Float
-
-  embedded_in :shape
 end
 
 class Warp
@@ -116,6 +111,8 @@ end
 
 class Treasure
   include Mongoid::Document
+
+  field :rep
 
   belongs_to :character
 end

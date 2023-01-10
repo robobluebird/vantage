@@ -123,13 +123,14 @@ function showMediaWithData(data) {
   let e;
   switch (data.type) {
     case 'download':
-      console.log('how send file tho?');
+      e = document.createElement('a');
+      e.href = `/scenes/${SCENE_ID}/interactables/${data.id}/data`;
+      e.innerText = 'download file';
       break;
     case 'audio':
       e = document.createElement('audio');
       e.controls = true;
-      if (!data.data.objectURL) data.data.objectURL = URL.createObjectURL(data.data.file);
-      e.src = data.data.objectURL;
+      e.src = `/scenes/${SCENE_ID}/interactables/${data.id}/data`;
       break;
     case 'link':
       e = document.createElement('a');
@@ -393,25 +394,18 @@ function finishPlacingInteractable() {
       break;
   }
 
-  let postData = '';
-  postData = postData.concat(`interactable_type=${configuringInteractable.type}`)
-  postData = postData.concat(`&xp=${configuringInteractable.x / scaledImageWidth()}`);
-  postData = postData.concat(`&yp=${configuringInteractable.y / scaledImageHeight()}`);
-  postData = postData.concat(`&size=${idealInteractablePlacingSize}`);
+  let params = {
+    interactable_type: configuringInteractable.type,
+    xp: configuringInteractable.x / scaledImageWidth(),
+    yp: configuringInteractable.y / scaledImageHeight(),
+    size: idealInteractablePlacingSize
+  };
 
-  // DO A THING that allows the file data to come through...data and type
-
-  let pData = '';
   for (const [key, value] of Object.entries(data)) {
-    console.log(`${key}: ${value}`);
-    pData = pData.concat(`${key}:${value}|`);
+    params[key] = value;
   }
 
-  pData = pData.slice(0, -1);
-
-  postData = postData.concat(`&data=${pData}`);
-
-  postRequest(`/scenes/${SCENE_ID}/interactables`, postData, function(result) {
+  postData(`/scenes/${SCENE_ID}/interactables`, params, function(result) {
     if (result.error) {
       console.log('we have error: ' + result.error);
     } else {
@@ -421,10 +415,13 @@ function finishPlacingInteractable() {
         objectType: 'interactable',
         id: result._id.$oid,
         type: result.interactable_type,
-        data: result.data,
         xp: result.xp,
         yp: result.yp,
         size: idealInteractablePlacingSize,
+        url: result.url,
+        description: result.description,
+        text: result.text,
+        file: result.file_url
       });
 
       console.log(interactables);
@@ -933,6 +930,7 @@ function joinScene() {
 
   characters.unshift({
     objectType: 'character',
+    id: CHARACTER_ID,
     images: imgs,
     xp: startingPoint.xp,
     yp: startingPoint.yp,
@@ -955,8 +953,7 @@ function joinScene() {
     if (result.error) {
       console.log(`something happened: ${result.error}`);
     } else {
-      // I guess it all went okay?
-      console.log('I guess it all went okay?');
+      console.log('i guess it all went okay?');
     }
   });
 
@@ -1476,12 +1473,17 @@ window.onload = function () {
             data: interactable.data,
             xp: interactable.xp,
             yp: interactable.yp,
-            size: interactable.size
+            size: interactable.size,
+            url: interactable.url,
+            description: interactable.description,
+            text: interactable.text,
+            file: interactable.file_url
           }
         });
       }
 
       if (scene.characters) {
+        console.log(scene.characters, CHARACTER_ID);
         characters = scene.characters.map(function(character) {
           return {
             objectType: 'character',
@@ -1837,7 +1839,7 @@ function getRequest(url, callback) {
 }
 
 function postRequest(url, paramsData, callback) {
-  var xhr = new XMLHttpRequest();
+  let xhr = new XMLHttpRequest();
   xhr.open("POST", url, true);
   xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
   xhr.setRequestHeader('X-CSRF-Token', AUTH_TOKEN);
@@ -1852,6 +1854,30 @@ function postRequest(url, paramsData, callback) {
   } else {
     xhr.send();
   }
+}
+
+function postData(url, params, callback) {
+  let fd = new FormData();
+  
+  console.log(params);
+
+  for (const [key, value] of Object.entries(params)) {
+    fd.append(key, value);
+  }
+
+  // start point before reload and upload TYPE so
+
+  let xhr = new XMLHttpRequest();
+  xhr.open("POST", url, true);
+  xhr.setRequestHeader('X-CSRF-Token', AUTH_TOKEN);
+  xhr.onreadystatechange = function() {
+    if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+      console.log(this.response);
+      callback(JSON.parse(this.response));
+    }
+  }
+
+  xhr.send(fd);
 }
 
 document.addEventListener("keydown", function (e) {

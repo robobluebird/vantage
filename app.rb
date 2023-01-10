@@ -174,10 +174,13 @@ get '/scenes/:scene_id/json' do
       interactables: @scene.interactables.map { |interactable| {
         id: interactable.id.to_s,
         interactable_type: interactable.interactable_type,
-        data: interactable.data,
         xp: interactable.xp,
         yp: interactable.yp,
-        size: interactable.size
+        size: interactable.size,
+        url: interactable.url,
+        description: interactable.description,
+        text: interactable.text,
+        file: interactable.file ? interactable.file.url : nil
       }},
       characters: @scene.characters.map { |character| {
         id: character.id.to_s,
@@ -223,6 +226,20 @@ get '/characters/:character_id/images/:image_index' do
   send_file t, type: @character.send("image#{params[:image_index]}").file.content_type, disposition: "inline"
 end
 
+get '/scenes/:scene_id/interactables/:interactable_id/data' do
+  scene = Scene.find params[:scene_id]
+  interactable = scene.interactables.find params[:interactable_id]
+
+  if interactable.file
+    t = Tempfile.new
+    t.write interactable.file.read
+    t.rewind
+    send_file t, type: interactable.file.file.content_type, disposition: "inline"
+  else
+    400
+  end
+end
+
 get '/users/:user_id/character/update' do
   @user = User.find params[:user_id]
 
@@ -252,7 +269,7 @@ post '/scenes' do
   s.user = current_user
   s.save!
 
-  redirect to("/scenes/#{s.id}/image")
+  redirect to("/scenes/#{s.id}")
 end
 
 post '/scenes/:scene_id/shapes' do
@@ -286,6 +303,11 @@ post '/scenes/:scene_id/shapes' do
   end
 end
 
+# add an image interactable and see what comess through
+# change it so the file data comes through
+# add gridfs thing to interactable to store data
+# use direct link for downloading AND sshowing images with src, etc
+
 post '/scenes/:scene_id/interactables' do
   scene = Scene.find params[:scene_id]
   i = Interactable.new
@@ -296,17 +318,17 @@ post '/scenes/:scene_id/interactables' do
 
   raise 'what the fuck' unless interactable_template
 
+  puts params.inspect
+
   i.scene = scene
   i.interactable_type = params[:interactable_type]
   i.xp = params[:xp]
   i.yp = params[:yp]
-  data = {}
-  params[:data].split('|').each do |pair_string|
-    pair = pair_string.split ':'
-    data[pair.first] = pair.last
-  end
-  i.data = data
   i.size = params[:size]
+  i.url = params[:url]
+  i.description = params[:description]
+  i.text = params[:text]
+  i.file = params[:file] ? params[:file][:tempfile] : nil
 
   i.save!
 

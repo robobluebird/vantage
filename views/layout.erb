@@ -5,11 +5,14 @@
   <body>
     <% if current_user %>
       <div style="position: absolute; top: 0; right: 0; background-color: lightgray;">
-        <p>signed in as: <%= current_user.name %>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/signout">sign out</a></p> 
+        <p>signed in as: <%= current_user.name %></p>
+        <p><a href="/users/<%= current_user.id %>/character/update">edit</a></p>
+        <p><a href="/signout">sign out</a></p> 
       </div>
     <% else %>
       <div style="position: absolute; top: 0; right: 0; background-color: lightgray;">
-        <a href="/signin">sign in</a>
+        <p><a href="/signin">sign in</a></p>
+        <p><a href="/signup">sign up</a></p>
       </div>
     <% end %>
     <%= yield %>
